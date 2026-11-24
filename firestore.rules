@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // =========================================================================
+    // Firestore Security Rules (V17 - Production Secured Edition)
+    // =========================================================================
+    // Requires authenticated badge (request.auth != null) for all collections.
+    // Unauthenticated internet bots and scrapers are strictly blocked.
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 1. Tasks collection: Authenticated users can view and manage tasks
+    match /tasks/{taskId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 2. Checklist items: Authenticated users can read and update checklists
+    match /checklist/{itemId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 3. Task History: Audit trail can be read and appended, but never modified or deleted
+    match /taskHistory/{historyId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // 4. Employees & Directory: Authenticated users can read and update team directory
+    match /employees/{empCode} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 5. Roles, Regions & App Config
+    match /roles/{role} {
+      allow read, write: if isAuthenticated();
+    }
+    match /regions/{region} {
+      allow read, write: if isAuthenticated();
+    }
+    match /config/{configDoc} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Strict Default: Block any unhandled path
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
