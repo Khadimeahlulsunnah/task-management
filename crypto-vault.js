@@ -5,7 +5,6 @@
 //   - Per-user RSA-OAEP (2048-bit, SHA-256) keypairs
 //   - Password-protected Private Key wrapping via PBKDF2 (100k iter) + AES-256-GCM
 //   - AES-256-GCM encryption/decryption for confidential task fields
-//   - AES-256-GCM chunked encryption/decryption for confidential file attachments
 // =============================================================================
 
 (function () {
@@ -14,8 +13,6 @@
   const SESSION_PRIV_KEY = 'tm.vault.priv';
   const SESSION_CODE_KEY = 'tm.vault.code';
   const PBKDF2_ITERATIONS = 100000;
-  const CHUNK_RAW_BYTES = 340 * 1024; // ~340 KB raw -> ~465 KB base64 (safe < 1 MB Firestore doc limit)
-  const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB max per encrypted attachment (Spark-friendly)
 
   let _privKey = null;
   let _pubKey = null;
@@ -297,74 +294,7 @@
     return utf8Decode(plain);
   }
 
-  async function encryptBytes(dek, uint8Data) {
-    const subtle = ensureWebCrypto();
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, dek, uint8Data);
-    return { iv: bytesToB64(iv), ct: bytesToB64(new Uint8Array(ct)) };
-  }
-
-  async function decryptBytes(dek, payload) {
-    const subtle = ensureWebCrypto();
-    const plain = await subtle.decrypt(
-      { name: 'AES-GCM', iv: b64ToBytes(payload.iv) },
-      dek,
-      b64ToBytes(payload.ct)
-    );
-    return new Uint8Array(plain);
-  }
-
-  // Encrypt a File object into metadata + array of encrypted chunk payloads
-  async function encryptFileForRecipients(file, recipientPublicJwks) {
-    if (!file) throw new Error('No file selected.');
-    if (file.size > MAX_FILE_BYTES) {
-      throw new Error('File "' + file.name + '" exceeds the 5 MB limit for encrypted attachments.');
-    }
-
-    const dek = await generateDek();
-    const envelopes = await wrapDekForRecipients(dek, recipientPublicJwks);
-    const nameEnc = await encryptText(dek, file.name);
-    const mimeEnc = await encryptText(dek, file.type || 'application/octet-stream');
-
-    const buffer = new Uint8Array(await file.arrayBuffer());
-    const chunks = [];
-    if (buffer.length === 0) {
-      chunks.push(await encryptBytes(dek, new Uint8Array(0)));
-    } else {
-      for (let offset = 0; offset < buffer.length; offset += CHUNK_RAW_BYTES) {
-        const slice = buffer.subarray(offset, offset + CHUNK_RAW_BYTES);
-        chunks.push(await encryptBytes(dek, slice));
-      }
-    }
-
-    return {
-      envelopes,
-      nameEnc,
-      mimeEnc,
-      sizeBytes: file.size,
-      chunkCount: chunks.length,
-      chunks
-    };
-  }
-
-  async function decryptFileRecord(meta, chunkPayloads, empCode) {
-    const dek = await unwrapDekFromEnvelopes(meta.KeyEnvelopes, empCode);
-    if (!dek) {
-      throw new Error('You do not have a decryption key for this confidential file.');
-    }
-    const fileName = await decryptText(dek, meta.NameEnc);
-    const mimeType = await decryptText(dek, meta.MimeEnc) || 'application/octet-stream';
-
-    const parts = [];
-    for (const chunk of chunkPayloads) {
-      parts.push(await decryptBytes(dek, chunk));
-    }
-    const blob = new Blob(parts, { type: mimeType });
-    return { fileName, mimeType, blob };
-  }
-
   window.CryptoVault = {
-    MAX_FILE_BYTES,
     initForUser,
     restoreSession,
     clearSession,
@@ -374,8 +304,6 @@
     wrapDekForRecipients,
     unwrapDekFromEnvelopes,
     encryptText,
-    decryptText,
-    encryptFileForRecipients,
-    decryptFileRecord
+    decryptText
   };
 })();
