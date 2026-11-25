@@ -147,16 +147,6 @@ p{margin:.4em 0}small,.muted{color:var(--muted)}
 .toast.bad{background:var(--bad)}.toast.out{opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s}
 .toast-action{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.5px;transition:all .15s;flex-shrink:0}
 .toast-action:hover{background:rgba(255,255,255,.2);border-color:#fff}
-.notif-btn{position:relative;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;padding:0;flex-shrink:0}
-.notif-btn:hover{background:var(--paper);border-color:var(--line2)}
-.notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--bad);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface);box-sizing:border-box}
-.notif-item{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:background-color .15s;text-align:left;width:100%;font:inherit;background:transparent;border-left:3px solid transparent;align-items:flex-start}
-.notif-item:hover{background:var(--paper)}
-.notif-item.unread{background:rgba(20,33,43,.03);border-left-color:var(--brand)}
-.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.9rem}
-.notif-content{flex:1;min-width:0}
-.notif-text{font-size:.88rem;color:var(--ink);line-height:1.35;word-break:break-word}
-.notif-time{font-size:.75rem;color:var(--muted);margin-top:3px}
 .kbd-hint{display:inline-block;padding:2px 6px;border:1px solid var(--line2);border-radius:4px;background:var(--paper);font-size:.75rem;font-family:monospace;color:var(--muted);box-shadow:0 1px 0 var(--line2)}
 @keyframes tin{from{opacity:0;transform:translateY(10px)}}
 
@@ -870,7 +860,6 @@ function api(name, ...args) {
 }
 function forceLogout(msg) {
   if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; }
-  if (S.notifTimer) { clearInterval(S.notifTimer); S.notifTimer = 0; }
   if (window.FirebaseBackend && window.FirebaseBackend.apiSignOut) window.FirebaseBackend.apiSignOut().catch(() => {});
   S.token = ''; S.boot = null; store.del('tm.token'); closeDrawer(true); showLogin(msg);
 }
@@ -933,10 +922,6 @@ function enter(r) {
   if (S.view === 'dashboard' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   if (S.view === 'mail' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   renderApp();
-  loadNotifications(true);
-  if (!S.notifTimer) {
-    S.notifTimer = setInterval(() => { if (S.token && !document.hidden) loadNotifications(true); }, 120000);
-  }
 }
 /* ================= app shell ================= */
 const IC = {
@@ -953,13 +938,6 @@ function renderApp() {
       <header class="top">
         <div class="brand">${b.app.name}</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <button class="notif-btn" data-act="opennotifs" title="Notifications" aria-label="Notifications">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
-            <span class="notif-badge" id="notif-badge" hidden></span>
-          </button>
           <button class="avatar" data-act="profile" title="${u.EmpName}" aria-label="My profile">${initials(u.EmpName)}</button>
         </div>
       </header>
@@ -970,7 +948,6 @@ function renderApp() {
     </aside>
     <main class="page" id="view"></main>
     <button class="fab" data-act="newtask" aria-label="New task">+</button>`);
-  updateNotifBadge();
   showView(S.view);
 }
 function paintHello(scope) {
@@ -2523,7 +2500,7 @@ function paintTests(r) {
     ${Object.keys(groups).map(g => h`<h3 style="margin:16px 0 4px">${g === 'Logic' ? 'Rules' : g === 'Setup' ? 'Your setup' : 'Live walk-through'}</h3><ul class="tests">${groups[g].map(i => h`<li><span class="badge b-${i.status}">${i.status}</span><div><b>${i.name}</b>${i.detail && h`<small class="muted">${i.detail}</small>`}</div></li>`)}</ul>`)}`);
 }
 
-/* ================= export & notifications & shortcuts ================= */
+/* ================= export & shortcuts ================= */
 function downloadCsv(content, filename) {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -2534,73 +2511,6 @@ function downloadCsv(content, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-function timeAgo(iso) {
-  if (!iso) return '';
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
-  return fmtDate(iso.split('T')[0]);
-}
-
-async function loadNotifications(silent) {
-  if (!S.token) return;
-  try {
-    const r = await api('apiGetNotifications', S.token);
-    S.notifications = r.notifications || [];
-    updateNotifBadge();
-  } catch (e) {
-    if (!silent && !e.auth) toast(e.message, true);
-  }
-}
-
-function updateNotifBadge() {
-  const badge = $('#notif-badge'); if (!badge) return;
-  const lastRead = Number(store.get('tm.lastNotifRead') || 0);
-  const unread = (S.notifications || []).filter(n => new Date(n.timestamp).getTime() > lastRead).length;
-  S.unreadNotifs = unread;
-  if (unread > 0) {
-    badge.textContent = unread > 99 ? '99+' : String(unread);
-    badge.hidden = false;
-  } else {
-    badge.hidden = true;
-  }
-}
-
-function openNotifications() {
-  const lastRead = Number(store.get('tm.lastNotifRead') || 0);
-  const notifs = S.notifications || [];
-  const notifIcon = type => {
-    if (type === 'task_assigned') return '📋';
-    if (type === 'task_completed') return '✅';
-    if (type === 'task_reopened') return '🔄';
-    if (type === 'checklist') return '☑️';
-    return '🔔';
-  };
-
-  openDrawer(
-    h`<h2>Notifications</h2><button class="btn ghost sm" data-act="closedrawer" aria-label="Close">✕</button>`,
-    h`<div class="notif-drawer-content">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 12px;border-bottom:1px solid var(--line)">
-        <span class="muted" style="font-size:.85rem">${notifs.length ? notifs.length + ' recent activity update(s)' : 'No activity yet'}</span>
-        ${notifs.length ? h`<button class="btn sm ghost" data-act="markallnotifsread" style="height:26px;font-size:.78rem;padding:2px 8px">Mark all as read</button>` : ''}
-      </div>
-      ${notifs.length ? h`<div class="notif-list">${notifs.map(n => {
-        const isUnread = new Date(n.timestamp).getTime() > lastRead;
-        return h`<div class="notif-item ${isUnread ? 'unread' : ''}" data-act="clicknotif" data-id="${n.taskId}">
-          <div class="notif-icon">${notifIcon(n.type)}</div>
-          <div class="notif-content">
-            <div class="notif-text">${n.text}</div>
-            <div class="notif-time">${timeAgo(n.timestamp)}</div>
-          </div>
-        </div>`;
-      })}</div>` : h`<div class="empty" style="padding:40px 20px;text-align:center"><b>All caught up!</b><p class="muted" style="margin-top:6px;font-size:.88rem">You'll see activity updates here when tasks are assigned, completed, or updated.</p></div>`}
-    </div>`,
-    h`<button class="btn" data-act="closedrawer">Close</button>`
-  );
 }
 
 function openShortcutsModal() {
@@ -2877,20 +2787,6 @@ const ACT = {
       toast('Exported ' + r.count + ' dashboard task(s) to CSV.');
     } catch (e) { if (!e.auth) toast(e.message, true); }
   }),
-  opennotifs: () => openNotifications(),
-  markallnotifsread: () => {
-    store.set('tm.lastNotifRead', String(Date.now()));
-    updateNotifBadge();
-    openNotifications();
-    toast('All notifications marked as read.');
-  },
-  clicknotif: el => {
-    const taskId = el.dataset.id;
-    store.set('tm.lastNotifRead', String(Date.now()));
-    updateNotifBadge();
-    closeDrawer(true);
-    if (taskId) openTask(taskId);
-  },
   shortcuts: () => openShortcutsModal(),
   uploadtaskfile: el => {
     const id = el.dataset.id, inp = $('#d-file-in');
