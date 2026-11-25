@@ -1,5 +1,5 @@
 // =============================================================================
-// FIREBASE CONFIGURATION (V17 - Firebase Edition)
+// FIREBASE CONFIGURATION (V17.1 - Hardened Auth + Encrypted Vault Edition)
 // =============================================================================
 
 const firebaseConfig = {
@@ -11,19 +11,12 @@ const firebaseConfig = {
   appId: "1:246631069985:web:a8edb5f48fd56e0b29a660"
 };
 
-// Optional: Free Email Relay Configuration (for task alerts & reminder emails)
+// Optional: Email Relay Configuration (for task alerts & reminder emails)
+// NOTE: Do NOT store secret passcodes or private API keys in this public file.
+// The Apps Script relay verifies the logged-in user's Firebase ID token on Google's servers.
 const emailConfig = {
-  // Option A: Free Brevo API Key (300 emails/day free)
-  brevoApiKey: "",
-  senderEmail: "",
-  senderName: "Task Management",
-
-  // Option B: Free Google Apps Script Email Relay Webhook URL
   appsScriptRelayUrl: "https://script.google.com/macros/s/AKfycbwXFC1DA_YxoX9Q-6CHa_68XotmTEPlIRxxjIrM9A5XmSEuyt4zRVjKcuztHOan0IERHg/exec",
-
-  // Secret passcode to protect your Google account from spam abuse
-  // (Must match RELAY_SECRET in AppsScript_Email_Relay.gs)
-  relaySecret: "TM_SECURE_RELAY_KEY_2026"
+  senderName: "Task Management"
 };
 
 if (typeof window !== 'undefined') {
