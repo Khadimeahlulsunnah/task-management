@@ -234,6 +234,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   .rail .profile{display:flex;align-items:center;gap:10px;padding:8px;border:0;border-radius:var(--r);background:none;text-align:left;cursor:pointer}.rail .profile:hover{background:var(--hover)}
   .rail .profile .avatar{display:grid;place-items:center;flex:none}.rail .profile small{display:block;color:var(--muted)}
   .rail~.page{margin:0 0 0 232px;max-width:none;padding:36px max(32px,calc((100% - 880px)/2)) 48px}
+  .rail~.page.is-full,.rail~.page:has(.nx-shell){padding:22px 28px 44px}
   #toasts{bottom:24px}
 }
 .tpl-group+.tpl-group{margin-top:10px}.tpl-head{padding:6px 5px 4px;font-size:.84rem}.tpl-head b{font-size:.9rem}
@@ -887,6 +888,8 @@ function showView(v) {
   const fab = $('.fab');
   if (fab) fab.hidden = (v === 'admin' || v === 'dashboard' || v === 'mail');
   $$('.tab').forEach(t => { if (t.dataset.v === v) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); });
+  const viewEl = $('#view');
+  if (viewEl) viewEl.classList.toggle('is-full', v === 'dashboard');
   window.scrollTo(0, 0);
   if (v === 'admin') return renderAdmin();
   if (v === 'mail') return renderMail();
@@ -1008,7 +1011,7 @@ function svgGauge(percent) {
 function svgColumnChart(items, emptyText) {
   const rows = (items || []).slice(-6);
   if (!rows.length) return h`<div class="empty" style="padding:28px 16px">${emptyText || 'No activity data yet.'}</div>`;
-  const w = 440, hgt = 190, padL = 30, padR = 12, padT = 20, padB = 30;
+  const w = 540, hgt = 205, padL = 32, padR = 14, padT = 22, padB = 30;
   const maxVal = Math.max(2, ...rows.map(r => Math.max(r.created || 0, r.completed || 0)));
   const chartW = w - padL - padR, chartH = hgt - padT - padB;
   const slotW = chartW / rows.length;
