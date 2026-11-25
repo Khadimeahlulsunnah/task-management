@@ -1889,11 +1889,31 @@
         return true;
       });
 
-      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, Total: selected.length };
+      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, AwaitingConfirm: 0, Total: selected.length };
       const byRegion = {}, byLocation = {}, byRole = {}, byEmployee = {}, byNazim = {};
       const byDue = { 'Due today': 0, 'Due within 7 days': 0, 'Due later': 0, 'No due date': 0 };
       const byCreated = {}, byCompleted = {};
       const todayKey = tmDayKey_(new Date());
+      const todayMs = new Date(todayKey + 'T00:00:00').getTime();
+
+      let completedOnTime = 0, completedLate = 0, selfTasks = 0, managerTasks = 0;
+      const overdueItems = [], dueTodayItems = [], awaitingItems = [];
+
+      // 6 rolling 7-day activity buckets (5 weeks ago .. This Week)
+      const weekly = [];
+      const weekMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (let w = 5; w >= 0; w--) {
+        const startMs = todayMs - (w * 7 + 6) * 86400000;
+        const endMs = todayMs - (w * 7) * 86400000;
+        const sd = new Date(startMs);
+        weekly.push({
+          label: w === 0 ? 'This Wk' : (weekMonths[sd.getMonth()] + ' ' + sd.getDate()),
+          startKey: tmDayKey_(sd),
+          endKey: tmDayKey_(new Date(endMs)),
+          created: 0,
+          completed: 0
+        });
+      }
 
       const bump = (map, key, rec) => {
         key = key || 'Unassigned';
@@ -1911,28 +1931,45 @@
         counts[t.Status] = (counts[t.Status] || 0) + 1;
         if (x.overdue) counts.Overdue++;
 
-        if (t.Status !== 'Completed') {
-          if (!x.overdue) {
-            if (!x.due) byDue['No due date']++;
-            else {
-              const day = tmDayKey_(x.due);
-              const days = Math.round((new Date(day + 'T00:00:00').getTime() - new Date(todayKey + 'T00:00:00').getTime()) / 86400000);
-              if (days === 0) byDue['Due today']++;
-              else if (days <= 7) byDue['Due within 7 days']++;
-              else byDue['Due later']++;
-            }
+        const isSelf = String(t.AssignedBy) === String(t.AssignedTo);
+        if (isSelf) selfTasks++; else managerTasks++;
+        if (!isSelf && String(t.Status || 'Pending') === 'Pending' && !t.ReceivedAt) {
+          counts.AwaitingConfirm++;
+          awaitingItems.push(x);
+        }
+
+        const dueKey = x.due ? tmDayKey_(x.due) : '';
+        if (t.Status === 'Completed') {
+          const compKey = t.CompletedAt ? tmDayKey_(tmAsDate_(t.CompletedAt)) : '';
+          if (!dueKey || !compKey || compKey <= dueKey) completedOnTime++;
+          else completedLate++;
+        } else {
+          if (x.overdue) {
+            const daysLate = dueKey ? Math.max(1, Math.round((todayMs - new Date(dueKey + 'T00:00:00').getTime()) / 86400000)) : 1;
+            overdueItems.push({ rec: x, daysLate });
+          } else if (!dueKey) {
+            byDue['No due date']++;
+          } else {
+            const days = Math.round((new Date(dueKey + 'T00:00:00').getTime() - todayMs) / 86400000);
+            if (days === 0) { byDue['Due today']++; dueTodayItems.push(x); }
+            else if (days <= 7) byDue['Due within 7 days']++;
+            else byDue['Due later']++;
           }
         }
 
         const created = tmAsDate_(t.CreatedAt);
         if (created) {
-          const m = tmDayKey_(created).slice(0, 7);
+          const cKey = tmDayKey_(created);
+          const m = cKey.slice(0, 7);
           byCreated[m] = (byCreated[m] || 0) + 1;
+          weekly.forEach(wb => { if (cKey >= wb.startKey && cKey <= wb.endKey) wb.created++; });
         }
         const completed = tmAsDate_(t.CompletedAt);
         if (t.Status === 'Completed' && completed) {
-          const m = tmDayKey_(completed).slice(0, 7);
+          const fKey = tmDayKey_(completed);
+          const m = fKey.slice(0, 7);
           byCompleted[m] = (byCompleted[m] || 0) + 1;
+          weekly.forEach(wb => { if (fKey >= wb.startKey && fKey <= wb.endKey) wb.completed++; });
         }
 
         bump(byRegion, String(e.Region || t.Region || 'Unassigned'), x);
@@ -1962,6 +1999,18 @@
       const page = drill.slice(offset, offset + PAGE_SIZE);
       const shapedDrill = await Promise.all(page.map(x => tmShapeTask_(x.task, access, hier.byCode)));
 
+      overdueItems.sort((a, b) => b.daysLate - a.daysLate);
+      const topOverdue = await Promise.all(overdueItems.slice(0, 6).map(async it => {
+        const s = await tmShapeTask_(it.rec.task, access, hier.byCode);
+        s.DaysLate = it.daysLate;
+        return s;
+      }));
+      const dueTodayList = await Promise.all(dueTodayItems.slice(0, 6).map(it => tmShapeTask_(it.task, access, hier.byCode)));
+      const awaitingConfirmList = await Promise.all(awaitingItems.slice(0, 6).map(it => tmShapeTask_(it.task, access, hier.byCode)));
+
+      const doneTotal = completedOnTime + completedLate;
+      const onTimeRate = doneTotal ? Math.round(completedOnTime * 1000 / doneTotal) / 10 : (counts.Total ? Math.round((counts.Total - counts.Overdue) * 1000 / counts.Total) / 10 : 100);
+
       return {
         ok: true,
         employeeOnly: false,
@@ -1971,13 +2020,26 @@
         openTotal: (counts.Pending || 0) + (counts['In Progress'] || 0),
         completionRate: counts.Total ? Math.round(counts.Completed * 1000 / counts.Total) / 10 : 0,
         overdueRate: counts.Total ? Math.round(counts.Overdue * 1000 / counts.Total) / 10 : 0,
+        summary: {
+          dueThisWeek: (byDue['Due today'] || 0) + (byDue['Due within 7 days'] || 0),
+          awaitingConfirm: counts.AwaitingConfirm,
+          completedOnTime,
+          completedLate,
+          onTimeRate,
+          selfTasks,
+          managerTasks
+        },
         byRegion: values(byRegion).slice(0, 12),
         byLocation: values(byLocation).slice(0, 12),
         byRole: values(byRole).slice(0, 20),
         byEmployee: values(byEmployee).slice(0, 50),
         byNazim: canFilterAll ? values(byNazim).slice(0, 12) : [],
         due: byDue,
-        trends: Object.keys(byCreated).sort().slice(-12).map(month => ({ month, created: byCreated[month], completed: byCompleted[month] || 0 })),
+        weekly: weekly.map(w => ({ label: w.label, created: w.created, completed: w.completed })),
+        trends: Object.keys(byCreated).sort().slice(-6).map(month => ({ month, created: byCreated[month], completed: byCompleted[month] || 0 })),
+        topOverdue,
+        dueTodayList,
+        awaitingConfirmList,
         drilldown: {
           status: statusFilter,
           total: drill.length,
