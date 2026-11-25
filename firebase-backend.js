@@ -36,7 +36,6 @@
     'Compliance Head', 'System Admin', 'Admin'
   ];
   const PAGE_SIZE = 50;
-  const MAX_FILES_PER_TASK = 5;
   const TM_TPL_ALL = '*';
 
   let fbApp = null;
@@ -637,14 +636,10 @@
       const dsg = r.All !== undefined
         ? { all: !!r.All, roles: Array.isArray(r.Roles) ? r.Roles : [] }
         : tmParseDesignations_(r.Designations);
-      const steps = Array.isArray(r.Checklist)
-        ? r.Checklist.map(x => String(x).trim()).filter(Boolean)
-        : String(r.Checklist || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
       list.push({
         id,
         title,
         description: String(r.Description || ''),
-        checklist: steps,
         all: dsg.all,
         roles: dsg.roles,
         active: tmYes_(r.Active),
@@ -654,65 +649,8 @@
     return list.sort((a, b) => a.title.localeCompare(b.title));
   }
 
-  // ================= Checklists & Decryption =================
-  async function tmChecklistFor_(taskIds, taskMap, viewerCode, isPrivileged) {
-    if (!taskIds.length) return {};
-    const map = {};
-    taskIds.forEach(id => { map[String(id)] = []; });
-
-    const docs = [];
-    if (isPrivileged) {
-      const chunks = [];
-      for (let i = 0; i < taskIds.length; i += 30) {
-        chunks.push(taskIds.slice(i, i + 30));
-      }
-      for (const chunk of chunks) {
-        const snap = await db.collection('checklist').where('TaskID', 'in', chunk).get();
-        snap.forEach(d => docs.push(d));
-      }
-    } else {
-      // Query by WatcherCodes so Firestore security rules statically verify access
-      const snap = await db.collection('checklist').where('WatcherCodes', 'array-contains', viewerCode).get();
-      snap.forEach(d => {
-        if (map[String(d.data().TaskID)]) docs.push(d);
-      });
-    }
-
-    const dekCache = {};
-    for (const d of docs) {
-      const x = d.data();
-      const tid = String(x.TaskID);
-      if (!map[tid]) continue;
-
-      let text = String(x.Text || '');
-      if (x.IsConfidential && x.TextEnc && window.CryptoVault && window.CryptoVault.isUnlocked(viewerCode)) {
-        try {
-          const parentTask = taskMap && taskMap[tid];
-          if (parentTask && parentTask.KeyEnvelopes) {
-            if (!Object.prototype.hasOwnProperty.call(dekCache, tid)) {
-              dekCache[tid] = await window.CryptoVault.unwrapDekFromEnvelopes(parentTask.KeyEnvelopes, viewerCode);
-            }
-            if (dekCache[tid]) text = await window.CryptoVault.decryptText(dekCache[tid], x.TextEnc);
-          }
-        } catch (e) {
-          text = '[Encrypted Step]';
-        }
-      }
-
-      map[tid].push({
-        id: String(x.ItemID || d.id),
-        text,
-        done: tmYes_(x.IsDone),
-        order: Number(x.SortOrder) || 0
-      });
-    }
-
-    Object.keys(map).forEach(k => map[k].sort((a, b) => a.order - b.order));
-    return map;
-  }
-
-  async function tmShapeTask_(t, a, checklist, byCode) {
-    const items = checklist[String(t.TaskID)] || [];
+  // ================= Task Shaping & Decryption =================
+  async function tmShapeTask_(t, a, byCode) {
     const over = tmOverdue_(t.DueDate, t.Status);
     const assignedTo = byCode[String(t.AssignedTo)] || {};
     const selfAssigned = String(t.AssignedBy) === String(t.AssignedTo);
@@ -741,13 +679,16 @@
       }
     }
 
+    const receivedAt = tmStamp_(t.ReceivedAt);
+    const status = String(t.Status || 'Pending');
+    const needsAck = !selfAssigned && String(t.AssignedTo) === a.code && status === 'Pending' && !t.ReceivedAt;
+
     return {
       TaskID: String(t.TaskID),
       Title: title,
       Description: description,
       IsConfidential: !!t.IsConfidential,
       DecryptLocked: decryptLocked,
-      FileCount: Number(t.FileCount) || 0,
       AssignedBy: String(t.AssignedBy),
       AssignedByName: byName,
       AssignedTo: String(t.AssignedTo),
@@ -757,16 +698,15 @@
       Region: String(t.Region || ''),
       Division: String(t.Division || ''),
       Due: t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '',
-      Status: String(t.Status || 'Pending'),
+      Status: status,
       Overdue: over,
       Created: tmStamp_(t.CreatedAt),
       Updated: tmStamp_(t.UpdatedAt),
+      ReceivedAt: receivedAt,
+      NeedsAck: needsAck,
       Completed: tmStamp_(t.CompletedAt),
       Reminders: Number(t.ReminderCount) || 0,
       LastReminder: tmStamp_(t.LastReminderAt),
-      Checklist: items,
-      Done: items.filter(x => x.done).length,
-      Total: items.length,
       CanUpdate: tmCanUpdate_(a, t),
       CanManage: tmCanManage_(a, t),
       CanDelete: tmCanDelete_(a, t),
@@ -1335,95 +1275,24 @@
 
       const offset = Math.max(0, Number(filters.offset) || 0);
       const page = matched.slice(offset, offset + PAGE_SIZE);
-      const pageMap = {};
-      page.forEach(t => { pageMap[String(t.TaskID)] = t; });
-      const checklist = await tmChecklistFor_(page.map(t => t.TaskID), pageMap, access.code, access.admin || access.headOffice);
-      const shaped = await Promise.all(page.map(t => tmShapeTask_(t, access, checklist, byCode)));
+      const shaped = await Promise.all(page.map(t => tmShapeTask_(t, access, byCode)));
+
+      let ackTasks = [];
+      if (scope === 'mine' && offset === 0) {
+        const ackRaw = allTasks
+          .filter(t => String(t.AssignedTo) === access.code && String(t.AssignedBy) !== access.code && String(t.Status || 'Pending') === 'Pending' && !t.ReceivedAt)
+          .sort((x, y) => tmSortKey_(x).localeCompare(tmSortKey_(y)) || String(x.Title).localeCompare(String(y.Title)));
+        ackTasks = await Promise.all(ackRaw.map(t => tmShapeTask_(t, access, byCode)));
+      }
 
       return {
         ok: true,
         tasks: shaped,
+        ackTasks,
         total: matched.length,
         counts,
         hasMore: offset + PAGE_SIZE < matched.length,
         nextOffset: offset + PAGE_SIZE
-      };
-    },
-
-    apiExportTasks: async function (token, filters) {
-      const { user } = await tmAuth_(token);
-      filters = filters || {};
-      const access = await tmAccess_(user);
-      const hier = await tmHierarchy_();
-      const byCode = hier.byCode;
-      const scope = filters.scope === 'team' ? 'team' : 'mine';
-      const isNazim = (hier.children[user.EmpCode] || []).length > 0;
-      if (scope === 'team' && !isNazim && !access.admin && !access.headOffice) {
-        throw new Error('Team task export is limited to Nazim users.');
-      }
-
-      const allTasks = await tmFetchVisibleTasks_(access, scope);
-      const today = tmDayKey_(new Date());
-      const search = String(filters.search || '').trim().toLowerCase();
-      const emp = String(filters.employee || '').trim().toLowerCase();
-      const matched = [];
-
-      allTasks.forEach(t => {
-        if (!tmCanSee_(access, t)) return;
-        const mine = String(t.AssignedTo) === access.code;
-        if (scope === 'mine' ? !mine : mine) return;
-        const e = byCode[String(t.AssignedTo)] || {};
-        if (filters.location && String(e.Division || t.Division || '') !== filters.location) return;
-        if (filters.region && String(t.Region || e.Region || '') !== filters.region) return;
-        if (filters.division && String(t.Division || e.Division || '') !== filters.division) return;
-        if (filters.role && String(e.Role || '') !== filters.role) return;
-        if (emp && String(t.AssignedTo).toLowerCase() !== emp && String(e.EmpName || '').toLowerCase().indexOf(emp) < 0) return;
-        if (search && (String(t.Title).toLowerCase() + ' ' + String(t.Description).toLowerCase()).indexOf(search) < 0) return;
-        const due = t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '';
-        if (filters.dueFrom && (!due || due < filters.dueFrom)) return;
-        if (filters.dueTo && (!due || due > filters.dueTo)) return;
-        const over = t.Status !== 'Completed' && due && due < today;
-        if (filters.status && (filters.status === 'Overdue' ? !over : String(t.Status) !== filters.status)) return;
-        if ((filters.overdue === true || filters.overdue === 'true') && !over) return;
-        matched.push(t);
-      });
-
-      if (scope === 'team') {
-        matched.sort((x, y) => {
-          const xn = String((byCode[String(x.AssignedTo)] || {}).EmpName || x.AssignedTo);
-          const yn = String((byCode[String(y.AssignedTo)] || {}).EmpName || y.AssignedTo);
-          return xn.localeCompare(yn) || String(x.Title).localeCompare(String(y.Title)) || tmSortKey_(x).localeCompare(tmSortKey_(y));
-        });
-      } else {
-        matched.sort((x, y) => tmSortKey_(x).localeCompare(tmSortKey_(y)) || String(x.Title).localeCompare(String(y.Title)));
-      }
-
-      const map = {};
-      matched.forEach(t => { map[String(t.TaskID)] = t; });
-      const checklist = await tmChecklistFor_(matched.map(t => t.TaskID), map, access.code, access.admin || access.headOffice);
-      const shapedList = await Promise.all(matched.map(t => tmShapeTask_(t, access, checklist, byCode)));
-
-      const headers = [
-        'Task ID', 'Title', 'Description', 'Assigned To (Name)', 'Assigned To (Code)',
-        'Assigned By (Name)', 'Assigned By (Code)', 'Region', 'Division', 'Due Date',
-        'Status', 'Checklist Total', 'Checklist Completed', 'Created At', 'Completed At'
-      ];
-      const csvEsc = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
-      const rows = [headers.map(csvEsc).join(',')];
-
-      shapedList.forEach(s => {
-        rows.push([
-          s.TaskID, s.Title, s.Description || '', s.AssignedToName, s.AssignedTo,
-          s.AssignedByName, s.AssignedBy, s.Region, s.Division, s.Due,
-          s.Status, s.Total || 0, s.Done || 0, s.Created, s.Completed
-        ].map(csvEsc).join(','));
-      });
-
-      return {
-        ok: true,
-        csv: '\uFEFF' + rows.join('\r\n'),
-        filename: `tasks_${scope}_${tmDayKey_(new Date())}.csv`,
-        count: matched.length
       };
     },
 
@@ -1453,7 +1322,6 @@
       const rawTasks = Array.isArray(data.tasks) ? data.tasks : (data.title ? [data.title] : []);
       const defaultDue = tmParseDay_(data.dueDate) || tmAsDate_(data.dueDate) || new Date();
       const defaultNote = tmClip_(data.description, 2000);
-      const defaultSteps = (Array.isArray(data.checklist) ? data.checklist : []).map(x => tmClip_(x, 200)).filter(Boolean).slice(0, 40);
 
       const parsedTasks = [];
       rawTasks.forEach(item => {
@@ -1463,12 +1331,10 @@
           if (!title) return;
           const due = tmParseDay_(item.dueDate || item.DueDate || item.due) || tmAsDate_(item.dueDate) || defaultDue;
           const desc = item.description !== undefined ? tmClip_(item.description, 2000) : defaultNote;
-          const stepsRaw = Array.isArray(item.checklist) ? item.checklist : (Array.isArray(item.steps) ? item.steps : defaultSteps);
-          const steps = stepsRaw.map(x => tmClip_(x, 200)).filter(Boolean).slice(0, 40);
-          parsedTasks.push({ title, due, description: desc, steps });
+          parsedTasks.push({ title, due, description: desc });
         } else {
           const title = tmClip_(item, 200);
-          if (title) parsedTasks.push({ title, due: defaultDue, description: defaultNote, steps: defaultSteps });
+          if (title) parsedTasks.push({ title, due: defaultDue, description: defaultNote });
         }
       });
 
@@ -1488,7 +1354,7 @@
       typedTargets.forEach(target => {
         if (wanted.has(target)) {
           parsedTasks.forEach(pt => {
-            specs.push({ target, title: pt.title, due: pt.due, description: pt.description, steps: pt.steps, templateId: '' });
+            specs.push({ target, title: pt.title, due: pt.due, description: pt.description, templateId: '' });
           });
         }
       });
@@ -1517,7 +1383,6 @@
                 title: t.title,
                 due: defaultDue,
                 description: [t.description, defaultNote].filter(Boolean).join('\n\n').slice(0, 2000),
-                steps: t.checklist.slice(0, 40),
                 templateId: id
               });
             });
@@ -1541,7 +1406,7 @@
         taskIds.push(taskId);
 
         let taskData;
-        let dek = null;
+        const receivedAt = sp.target === user.EmpCode ? now : null;
         if (isConfidential) {
           if (!targetKeyCache[sp.target]) {
             const allowedCodes = await getAllowedKeyCodes_(sp.target, user.EmpCode, hier);
@@ -1549,7 +1414,7 @@
             targetKeyCache[sp.target] = { allowedCodes, jwks };
           }
           const { allowedCodes, jwks } = targetKeyCache[sp.target];
-          dek = await window.CryptoVault.generateDek();
+          const dek = await window.CryptoVault.generateDek();
           const keyEnvelopes = await window.CryptoVault.wrapDekForRecipients(dek, jwks);
           const titleEnc = await window.CryptoVault.encryptText(dek, sp.title);
           const descEnc = sp.description ? await window.CryptoVault.encryptText(dek, sp.description) : null;
@@ -1570,7 +1435,7 @@
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
             Status: 'Pending',
-            FileCount: 0,
+            ReceivedAt: receivedAt,
             CreatedAt: now,
             UpdatedAt: now,
             CompletedAt: null,
@@ -1590,7 +1455,7 @@
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
             Status: 'Pending',
-            FileCount: 0,
+            ReceivedAt: receivedAt,
             CreatedAt: now,
             UpdatedAt: now,
             CompletedAt: null,
@@ -1601,23 +1466,6 @@
 
         (taskRowsForMail[sp.target] = taskRowsForMail[sp.target] || []).push(taskData);
         taskWrites.push({ ref: db.collection('tasks').doc(taskId), data: taskData });
-
-        for (let idx = 0; idx < sp.steps.length; idx++) {
-          const step = sp.steps[idx];
-          const itemId = tmId_('ITM');
-          const itemDoc = {
-            ItemID: itemId,
-            TaskID: taskId,
-            Text: isConfidential ? '[Confidential Step]' : step,
-            IsConfidential: isConfidential,
-            IsDone: 'N',
-            DoneAt: null,
-            SortOrder: idx + 1,
-            WatcherCodes: watcherCodes
-          };
-          if (isConfidential && dek) itemDoc.TextEnc = await window.CryptoVault.encryptText(dek, step);
-          subWrites.push({ ref: db.collection('checklist').doc(itemId), data: itemDoc });
-        }
 
         subWrites.push({
           ref: db.collection('taskHistory').doc(),
@@ -1633,7 +1481,7 @@
         });
       }
 
-      // Commit tasks FIRST so Firestore rules can verify parent task existence for checklist & history
+      // Commit tasks FIRST so Firestore rules can verify parent task existence for taskHistory
       for (let i = 0; i < taskWrites.length; i += 450) {
         const b = db.batch();
         taskWrites.slice(i, i + 450).forEach(w => b.set(w.ref, w.data));
@@ -1686,18 +1534,6 @@
       const watcherCodes = task.WatcherCodes || getWatcherCodes_(task.AssignedTo, task.AssignedBy, hier);
       const changedFields = [];
       let reopening = false, reopenRemark = '', reopenRecipient = null;
-
-      if (Array.isArray(changes.checklist)) {
-        if (!tmCanUpdate_(access, task)) throw new Error('You cannot change the checklist of this task.');
-        changes.checklist.forEach(c => {
-          if (!c || !c.id) return;
-          batch.update(db.collection('checklist').doc(String(c.id)), {
-            IsDone: c.done ? 'Y' : 'N',
-            DoneAt: c.done ? now : null
-          });
-        });
-        changedFields.push('checklist');
-      }
 
       const nextTitle = changes.title !== undefined ? changes.title : changes.Title;
       const nextDesc = changes.description !== undefined ? changes.description : changes.Description;
@@ -1757,6 +1593,10 @@
       if (nextStatus !== undefined && nextStatus !== task.Status) {
         if (!tmCanUpdate_(access, task)) throw new Error('You cannot change the status of this task.');
         if (TM_STATUSES.indexOf(nextStatus) < 0) throw new Error('Unknown status.');
+        const isAssignedByOther = String(task.AssignedBy) !== String(task.AssignedTo);
+        if (!tmCanManage_(access, task) && isAssignedByOther && nextStatus === 'Pending' && task.ReceivedAt) {
+          throw new Error('Confirmed tasks assigned by your Nazim cannot be moved back to Pending.');
+        }
         reopening = task.Status === 'Completed' && nextStatus !== 'Completed';
         if (reopening) {
           reopenRemark = tmClip_(changes.remark, 1000);
@@ -1769,11 +1609,8 @@
         }
         updates.Status = nextStatus;
         updates.CompletedAt = nextStatus === 'Completed' ? now : null;
-        if (nextStatus === 'Completed') {
-          const checks = (access.admin || access.headOffice)
-            ? await db.collection('checklist').where('TaskID', '==', id).get()
-            : await db.collection('checklist').where('TaskID', '==', id).where('WatcherCodes', 'array-contains', access.code).get();
-          checks.forEach(c => batch.update(c.ref, { IsDone: 'Y', DoneAt: now }));
+        if (nextStatus === 'In Progress' && !task.ReceivedAt) {
+          updates.ReceivedAt = now;
         }
         batch.set(db.collection('taskHistory').doc(), {
           Timestamp: now,
@@ -1836,6 +1673,10 @@
         const t = snap.data();
         if (!tmCanSee_(access, t) || !tmCanUpdate_(access, t)) { failed.push({ id, reason: 'You cannot update this task.' }); continue; }
         if (String(t.Status) === status) { failed.push({ id, reason: 'Already ' + status + '.' }); continue; }
+        if (!tmCanManage_(access, t) && String(t.AssignedBy) !== String(t.AssignedTo) && status === 'Pending' && t.ReceivedAt) {
+          failed.push({ id, reason: 'Confirmed Nazim tasks cannot be moved back to Pending.' });
+          continue;
+        }
 
         const reopening = String(t.Status) === 'Completed' && status !== 'Completed';
         if (reopening && !comment) { failed.push({ id, reason: 'A remark is required when reopening a task.' }); continue; }
@@ -1846,6 +1687,7 @@
         }
 
         const updates = { Status: status, UpdatedAt: now, CompletedAt: status === 'Completed' ? now : null };
+        if (status === 'In Progress' && !t.ReceivedAt) updates.ReceivedAt = now;
         batch.update(docRef, updates);
         batch.set(db.collection('taskHistory').doc(), {
           Timestamp: now,
@@ -1874,7 +1716,7 @@
       };
     },
 
-    // 7. Delete Task (+ its encrypted attachments)
+    // 7. Delete Task
     apiDeleteTask: async function (token, id) {
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
@@ -1886,21 +1728,6 @@
 
       const batch = db.batch();
       batch.delete(docRef);
-      const checks = (access.admin || access.headOffice)
-        ? await db.collection('checklist').where('TaskID', '==', id).get()
-        : await db.collection('checklist').where('TaskID', '==', id).where('WatcherCodes', 'array-contains', access.code).get();
-      checks.forEach(c => batch.delete(c.ref));
-
-      const filesSnap = (access.admin || access.headOffice)
-        ? await db.collection('taskFiles').where('TaskID', '==', id).get()
-        : await db.collection('taskFiles').where('TaskID', '==', id).where('AllowedCodes', 'array-contains', access.code).get();
-      for (const fDoc of filesSnap.docs) {
-        const chunksSnap = (access.admin || access.headOffice)
-          ? await fDoc.ref.collection('chunks').get()
-          : await fDoc.ref.collection('chunks').where('AllowedCodes', 'array-contains', access.code).get();
-        chunksSnap.forEach(ch => batch.delete(ch.ref));
-        batch.delete(fDoc.ref);
-      }
 
       batch.set(db.collection('taskHistory').doc(), {
         Timestamp: new Date(),
@@ -1916,204 +1743,47 @@
       return { ok: true, taskId: id };
     },
 
-    // 8. Checklist Management
-    apiAddChecklistItem: async function (token, taskId, text) {
+    // 8. Compulsory Task Receipt Confirmation
+    apiAcknowledgeTasks: async function (token, taskIds) {
       const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      const taskSnap = await db.collection('tasks').doc(taskId).get();
-      if (!taskSnap.exists) throw new Error('Task no longer exists.');
-      const task = taskSnap.data();
-      if (!tmCanManage_(access, task)) throw new Error('You are not permitted to add checklist steps to this task.');
-
-      const cleanText = tmClip_(text, 200);
-      if (!cleanText) throw new Error('Please type the checklist item.');
-      const existing = (access.admin || access.headOffice)
-        ? await db.collection('checklist').where('TaskID', '==', taskId).get()
-        : await db.collection('checklist').where('TaskID', '==', taskId).where('WatcherCodes', 'array-contains', access.code).get();
-      if (existing.size >= 40) throw new Error('A task can have at most 40 checklist items.');
-
-      const itemId = tmId_('ITM');
-      const item = {
-        ItemID: itemId,
-        TaskID: taskId,
-        Text: task.IsConfidential ? '[Confidential Step]' : cleanText,
-        IsConfidential: !!task.IsConfidential,
-        IsDone: 'N',
-        DoneAt: null,
-        SortOrder: existing.size + 1,
-        WatcherCodes: task.WatcherCodes || [task.AssignedTo, task.AssignedBy]
-      };
-      if (task.IsConfidential) {
-        if (!window.CryptoVault || !window.CryptoVault.isUnlocked(user.EmpCode)) {
-          throw new Error('Unlock your vault to add steps to a confidential task.');
-        }
-        const dek = await window.CryptoVault.unwrapDekFromEnvelopes(task.KeyEnvelopes, user.EmpCode);
-        if (!dek) throw new Error('Missing encryption key for this task.');
-        item.TextEnc = await window.CryptoVault.encryptText(dek, cleanText);
-      }
-      await db.collection('checklist').doc(itemId).set(item);
-      await db.collection('tasks').doc(taskId).update({ UpdatedAt: new Date() });
-      return { ok: true, item: { id: itemId, text: cleanText, done: false, order: item.SortOrder } };
-    },
-
-    apiRemoveChecklistItem: async function (token, taskId, itemId) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      const taskSnap = await db.collection('tasks').doc(taskId).get();
-      if (taskSnap.exists && !tmCanManage_(access, taskSnap.data())) {
-        throw new Error('You are not permitted to remove checklist steps from this task.');
-      }
-      await db.collection('checklist').doc(itemId).delete();
-      return { ok: true };
-    },
-
-    // 9. Confidential Encrypted File Attachments
-    apiUploadTaskFile: async function (token, taskId, file) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!window.CryptoVault || !window.CryptoVault.isUnlocked(user.EmpCode)) {
-        throw new Error('Encryption vault is locked. Please unlock or sign in again to upload confidential files.');
-      }
-      const taskSnap = await db.collection('tasks').doc(taskId).get();
-      if (!taskSnap.exists) throw new Error('Task no longer exists.');
-      const task = taskSnap.data();
-      if (!tmCanSee_(access, task) || (!tmCanUpdate_(access, task) && !tmCanManage_(access, task))) {
-        throw new Error('You do not have permission to attach files to this task.');
-      }
-
-      const existing = (access.admin || access.headOffice)
-        ? await db.collection('taskFiles').where('TaskID', '==', taskId).get()
-        : await db.collection('taskFiles').where('TaskID', '==', taskId).where('AllowedCodes', 'array-contains', access.code).get();
-      if (existing.size >= MAX_FILES_PER_TASK) throw new Error(`Maximum ${MAX_FILES_PER_TASK} encrypted files allowed per task.`);
-
       const hier = await tmHierarchy_();
-      const allowedCodes = await getAllowedKeyCodes_(task.AssignedTo, task.AssignedBy, hier);
-      const recipientJwks = await fetchPublicKeys_(allowedCodes);
-      const enc = await window.CryptoVault.encryptFileForRecipients(file, recipientJwks);
+      const wanted = Array.isArray(taskIds) ? Array.from(new Set(taskIds.map(String).filter(Boolean))) : [];
+      if (!wanted.length || wanted.length > 100) throw new Error('Select between 1 and 100 tasks to confirm receipt.');
 
-      const fileId = tmId_('FIL');
-      const fileRef = db.collection('taskFiles').doc(fileId);
       const now = new Date();
-
-      await fileRef.set({
-        FileID: fileId,
-        TaskID: taskId,
-        IsConfidential: true,
-        NameEnc: enc.nameEnc,
-        MimeEnc: enc.mimeEnc,
-        SizeBytes: enc.sizeBytes,
-        ChunkCount: enc.chunkCount,
-        KeyEnvelopes: enc.envelopes,
-        AllowedCodes: allowedCodes,
-        UploadedBy: user.EmpCode,
-        UploadedByName: user.EmpName,
-        CreatedAt: now
-      });
-
-      for (let i = 0; i < enc.chunks.length; i++) {
-        await fileRef.collection('chunks').doc(String(i).padStart(4, '0')).set({
-          idx: i, iv: enc.chunks[i].iv, ct: enc.chunks[i].ct, AllowedCodes: allowedCodes
-        });
-      }
-
-      await db.collection('tasks').doc(taskId).update({ FileCount: existing.size + 1, UpdatedAt: now });
-      return { ok: true, file: { FileID: fileId, name: file.name, sizeBytes: file.size, uploadedBy: user.EmpName, created: tmStamp_(now) } };
-    },
-
-    apiListTaskFiles: async function (token, taskId) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      const taskSnap = await db.collection('tasks').doc(taskId).get();
-      if (!taskSnap.exists) throw new Error('Task no longer exists.');
-      if (!tmCanSee_(access, taskSnap.data())) throw new Error('Access denied.');
-
-      const snap = (access.admin || access.headOffice)
-        ? await db.collection('taskFiles').where('TaskID', '==', taskId).get()
-        : await db.collection('taskFiles').where('TaskID', '==', taskId).where('AllowedCodes', 'array-contains', access.code).get();
-      const files = [];
-      const unlocked = window.CryptoVault && window.CryptoVault.isUnlocked(access.code);
-
-      for (const d of snap.docs) {
-        const f = d.data();
-        let name = 'Encrypted Confidential File';
-        let locked = true;
-        if (unlocked && f.KeyEnvelopes && f.KeyEnvelopes[access.code]) {
-          try {
-            const dek = await window.CryptoVault.unwrapDekFromEnvelopes(f.KeyEnvelopes, access.code);
-            if (dek) {
-              name = await window.CryptoVault.decryptText(dek, f.NameEnc);
-              locked = false;
-            }
-          } catch (e) { /* keep locked label */ }
-        }
-        files.push({
-          FileID: f.FileID || d.id,
-          name,
-          locked,
-          sizeBytes: Number(f.SizeBytes) || 0,
-          uploadedBy: f.UploadedByName || f.UploadedBy || '',
-          canDelete: access.admin || f.UploadedBy === access.code || tmCanManage_(access, taskSnap.data()),
-          created: tmStamp_(f.CreatedAt)
-        });
-      }
-      return { ok: true, files };
-    },
-
-    apiDownloadTaskFile: async function (token, fileId) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!window.CryptoVault || !window.CryptoVault.isUnlocked(access.code)) {
-        throw new Error('Unlock your encryption vault before downloading confidential files.');
-      }
-      const fileRef = db.collection('taskFiles').doc(fileId);
-      const fileSnap = await fileRef.get();
-      if (!fileSnap.exists) throw new Error('Confidential file not found.');
-      const meta = fileSnap.data();
-
-      const taskSnap = await db.collection('tasks').doc(meta.TaskID).get();
-      if (taskSnap.exists && !tmCanSee_(access, taskSnap.data())) throw new Error('You do not have access to this file.');
-
-      const chunksSnap = (access.admin || access.headOffice)
-        ? await fileRef.collection('chunks').get()
-        : await fileRef.collection('chunks').where('AllowedCodes', 'array-contains', access.code).get();
-      const chunkDocs = [];
-      chunksSnap.forEach(c => chunkDocs.push(c.data()));
-      chunkDocs.sort((a, b) => (Number(a.idx) || 0) - (Number(b.idx) || 0));
-
-      const decrypted = await window.CryptoVault.decryptFileRecord(meta, chunkDocs, access.code);
-      return Object.assign({ ok: true }, decrypted);
-    },
-
-    apiDeleteTaskFile: async function (token, fileId) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      const fileRef = db.collection('taskFiles').doc(fileId);
-      const fileSnap = await fileRef.get();
-      if (!fileSnap.exists) return { ok: true };
-      const meta = fileSnap.data();
-
-      const taskSnap = await db.collection('tasks').doc(meta.TaskID).get();
-      const canDel = access.admin || meta.UploadedBy === access.code || (taskSnap.exists && tmCanManage_(access, taskSnap.data()));
-      if (!canDel) throw new Error('You do not have permission to remove this file.');
-
       const batch = db.batch();
-      const chunksSnap = (access.admin || access.headOffice)
-        ? await fileRef.collection('chunks').get()
-        : await fileRef.collection('chunks').where('AllowedCodes', 'array-contains', access.code).get();
-      chunksSnap.forEach(c => batch.delete(c.ref));
-      batch.delete(fileRef);
-      await batch.commit();
+      let confirmed = 0;
 
-      if (taskSnap.exists) {
-        const rem = (access.admin || access.headOffice)
-          ? await db.collection('taskFiles').where('TaskID', '==', meta.TaskID).get()
-          : await db.collection('taskFiles').where('TaskID', '==', meta.TaskID).where('AllowedCodes', 'array-contains', access.code).get();
-        await db.collection('tasks').doc(meta.TaskID).update({ FileCount: rem.size });
+      for (const id of wanted) {
+        const docRef = db.collection('tasks').doc(id);
+        const snap = await docRef.get();
+        if (!snap.exists) continue;
+        const t = snap.data();
+        if (String(t.AssignedTo) !== String(user.EmpCode) || String(t.AssignedBy) === String(user.EmpCode)) continue;
+
+        const prevStatus = String(t.Status || 'Pending');
+        if (prevStatus === 'Pending' || !t.ReceivedAt) {
+          const updates = { ReceivedAt: t.ReceivedAt || now, UpdatedAt: now };
+          if (prevStatus === 'Pending') updates.Status = 'In Progress';
+          batch.update(docRef, updates);
+          batch.set(db.collection('taskHistory').doc(), {
+            Timestamp: now,
+            TaskID: id,
+            ActorEmpCode: user.EmpCode,
+            ActorName: user.EmpName,
+            Action: 'TASK_RECEIVED',
+            Details: JSON.stringify({ from: prevStatus, to: updates.Status || prevStatus }),
+            WatcherCodes: t.WatcherCodes || getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier)
+          });
+          confirmed++;
+        }
       }
-      return { ok: true };
+
+      if (confirmed > 0) await batch.commit();
+      return { ok: true, count: confirmed };
     },
 
-    // 10. Task History
+    // 9. Task History
     apiTaskHistory: async function (token, taskId) {
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
@@ -2290,10 +1960,7 @@
 
       const offset = Math.max(0, Math.min(100000, Number(f.offset) || 0));
       const page = drill.slice(offset, offset + PAGE_SIZE);
-      const pageMap = {};
-      page.forEach(x => { pageMap[String(x.task.TaskID)] = x.task; });
-      const checklist = await tmChecklistFor_(page.map(x => x.task.TaskID), pageMap, access.code, access.admin || access.headOffice);
-      const shapedDrill = await Promise.all(page.map(x => tmShapeTask_(x.task, access, checklist, hier.byCode)));
+      const shapedDrill = await Promise.all(page.map(x => tmShapeTask_(x.task, access, hier.byCode)));
 
       return {
         ok: true,
@@ -2334,9 +2001,9 @@
       const isManagerOrAdmin = !!(access.admin || access.headOffice || (hier.children[user.EmpCode] || []).length > 0);
       const allTemplates = (await tmTemplates_()).filter(t => t.active);
       const templates = isManagerOrAdmin
-        ? allTemplates.map(t => ({ id: t.id, title: t.title, description: t.description, checklist: t.checklist, all: t.all || !t.roles.length, roles: (t.all || !t.roles.length) ? [] : t.roles }))
+        ? allTemplates.map(t => ({ id: t.id, title: t.title, description: t.description, all: t.all || !t.roles.length, roles: (t.all || !t.roles.length) ? [] : t.roles }))
         : allTemplates.filter(t => t.all || !t.roles.length || t.roles.some(r => reach.has(r)))
-            .map(t => ({ id: t.id, title: t.title, description: t.description, checklist: t.checklist, all: t.all || !t.roles.length, roles: (t.all || !t.roles.length) ? [] : t.roles.filter(r => reach.has(r)) }));
+            .map(t => ({ id: t.id, title: t.title, description: t.description, all: t.all || !t.roles.length, roles: (t.all || !t.roles.length) ? [] : t.roles.filter(r => reach.has(r)) }));
       return { ok: true, templates };
     },
 
@@ -2361,9 +2028,6 @@
       const title = tmClip_(input.title, 200);
       if (!title) throw new Error('Please enter a template title.');
       const description = tmClip_(input.description, 2000);
-      const steps = (Array.isArray(input.checklist) ? input.checklist : String(input.checklist || '').split(/\r?\n/))
-        .map(x => tmClip_(x, 200)).filter(Boolean);
-      if (steps.length > 40) throw new Error('A template can have at most 40 checklist steps.');
 
       const active = tmYN_(input.active);
       const all = input.all === true;
@@ -2385,7 +2049,6 @@
         TemplateID: tplId,
         Title: title,
         Description: description,
-        Checklist: steps,
         Designations: all ? TM_TPL_ALL : JSON.stringify(roles),
         All: all,
         Roles: all ? [] : roles,
@@ -2924,112 +2587,6 @@
       return { ok: true };
     },
 
-    apiRequestEmailChange: async function (token, requestedEmail, reason) {
-      const { user } = await tmAuth_(token);
-      const email = tmClip_(requestedEmail, 254);
-      const why = tmClip_(reason, 1000);
-      if (!tmIsEmail_(email)) throw new Error('Please enter a valid requested email address.');
-      if (why.length < 10) throw new Error('Please provide a reason of at least 10 characters.');
-      if (email.toLowerCase() === String(user.Email || '').toLowerCase()) {
-        throw new Error('The requested email is already on your account.');
-      }
-
-      const h = await tmHierarchy_();
-      if (Object.keys(h.byCode).some(c => c !== user.EmpCode && String(h.byCode[c].Email).toLowerCase() === email.toLowerCase())) {
-        throw new Error('That email address is already used by another employee.');
-      }
-
-      const existing = await db.collection('emailChangeRequests').where('EmpCode', '==', user.EmpCode).get();
-      let hasPending = false;
-      existing.forEach(d => { if (d.data().Status === 'PENDING') hasPending = true; });
-      if (hasPending) throw new Error('You already have a pending email change request.');
-
-      const id = tmId_('EMAIL');
-      await db.collection('emailChangeRequests').doc(id).set({
-        RequestID: id,
-        EmpCode: user.EmpCode,
-        EmpName: user.EmpName,
-        CurrentEmail: user.Email,
-        RequestedEmail: email,
-        Reason: why,
-        RequestedAt: new Date(),
-        Status: 'PENDING',
-        ReviewedBy: '',
-        ReviewedAt: null,
-        ReviewNote: ''
-      });
-      await tmAudit_(user.EmpCode, 'EMAIL_CHANGE_REQUEST', id, { requestedEmail: email });
-      return { ok: true, requestId: id };
-    },
-
-    apiAdminEmailChangeRequests: async function (token) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!access.admin) throw new Error('Administrator access is required.');
-
-      const snap = await db.collection('emailChangeRequests').orderBy('RequestedAt', 'desc').limit(200).get();
-      const requests = [];
-      snap.forEach(d => {
-        const r = d.data();
-        if (r.Status === 'PENDING' || r.Status === 'APPROVED') {
-          requests.push({
-            requestId: String(r.RequestID || d.id),
-            empCode: String(r.EmpCode || ''),
-            empName: String(r.EmpName || ''),
-            currentEmail: String(r.CurrentEmail || ''),
-            requestedEmail: String(r.RequestedEmail || ''),
-            reason: String(r.Reason || ''),
-            requestedAt: tmStamp_(r.RequestedAt),
-            status: String(r.Status || ''),
-            reviewNote: String(r.ReviewNote || '')
-          });
-        }
-      });
-      return { ok: true, requests };
-    },
-
-    apiReviewEmailChangeRequest: async function (token, requestId, decision, note) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!access.admin) throw new Error('Administrator access is required.');
-      const id = tmClip_(requestId, 100);
-      const action = String(decision || '').toUpperCase();
-      if (action !== 'APPROVED' && action !== 'REJECTED') throw new Error('Choose approve or reject.');
-
-      const reqRef = db.collection('emailChangeRequests').doc(id);
-      const reqSnap = await reqRef.get();
-      if (!reqSnap.exists || reqSnap.data().Status !== 'PENDING') {
-        throw new Error('This request is no longer pending. Refresh the list.');
-      }
-      const req = reqSnap.data();
-
-      if (action === 'APPROVED') {
-        const email = String(req.RequestedEmail || '').trim();
-        if (!tmIsEmail_(email)) throw new Error('The requested email is invalid.');
-        const h = await tmHierarchy_();
-        if (Object.keys(h.byCode).some(c => c !== String(req.EmpCode) && String(h.byCode[c].Email).toLowerCase() === email.toLowerCase())) {
-          throw new Error('That email address is now used by another employee.');
-        }
-        const empRef = db.collection('employees').doc(req.EmpCode);
-        const empSnap = await empRef.get();
-        if (!empSnap.exists) throw new Error('The employee account was not found.');
-        await empRef.update({ Email: email });
-        if (empSnap.data().AuthUid) {
-          await db.collection('users').doc(empSnap.data().AuthUid).update({ Email: email }).catch(() => {});
-        }
-        memoClear();
-      }
-
-      await reqRef.update({
-        Status: action,
-        ReviewedBy: user.EmpCode,
-        ReviewedAt: new Date(),
-        ReviewNote: tmClip_(note, 500)
-      });
-      await tmAudit_(user.EmpCode, 'EMAIL_CHANGE_' + action, id, { empCode: req.EmpCode, note: tmClip_(note, 500) });
-      return { ok: true };
-    },
-
     // 15. Password & Session
     apiChangePassword: async function (token, currentPw, newPw) {
       const { user, fbUser } = await tmAuth_(token);
@@ -3097,24 +2654,17 @@
         return { ok: true, archived: 0, message: `No completed tasks older than ${days} days to archive.` };
       }
 
-      let checksCount = 0;
       for (const item of toArchive) {
         const b = db.batch();
         b.set(db.collection('taskArchive').doc(item.data.TaskID), Object.assign({}, item.data, { ArchivedAt: now }));
         b.delete(item.ref);
-        const cSnap = await db.collection('checklist').where('TaskID', '==', item.data.TaskID).get();
-        cSnap.forEach(c => {
-          b.set(db.collection('checklistArchive').doc(c.id), Object.assign({}, c.data(), { ArchivedAt: now }));
-          b.delete(c.ref);
-          checksCount++;
-        });
         await b.commit();
       }
 
       await db.collection('config').doc('app_config').set({ ARCHIVE_AT: now.toISOString() }, { merge: true });
       memoClear();
-      await tmAudit_(user.EmpCode, 'TASKS_ARCHIVED', 'taskArchive', { count: toArchive.length, checklistCount: checksCount, days });
-      return { ok: true, archived: toArchive.length, message: `Archived ${toArchive.length} completed task(s) and ${checksCount} checklist item(s) older than ${days} days.` };
+      await tmAudit_(user.EmpCode, 'TASKS_ARCHIVED', 'taskArchive', { count: toArchive.length, days });
+      return { ok: true, archived: toArchive.length, message: `Archived ${toArchive.length} completed task(s) older than ${days} days.` };
     },
 
     apiRunBackupNow: async function (token) {
@@ -3122,7 +2672,7 @@
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
 
-      const cols = ['config', 'roles', 'regions', 'employees', 'tasks', 'checklist', 'taskTemplates', 'reminderSchedule'];
+      const cols = ['config', 'roles', 'regions', 'employees', 'tasks', 'taskTemplates', 'reminderSchedule'];
       const payload = { exportedAt: new Date().toISOString(), projectId: window.FIREBASE_CONFIG.projectId, collections: {} };
 
       for (const c of cols) {
@@ -3146,22 +2696,6 @@
       memoClear();
       await tmAudit_(user.EmpCode, 'BACKUP_CREATED', name, { tasks: Object.keys(payload.collections.tasks || {}).length });
       return { ok: true, name, timestamp: stamp, backup: payload };
-    },
-
-    apiRefreshDashboard: async function (token) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!access.admin) throw new Error('Administrator access is required.');
-      memoClear();
-      const snap = await db.collection('tasks').get();
-      return { ok: true, rows: snap.size };
-    },
-
-    apiInstallTriggers: async function (token) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      if (!access.admin) throw new Error('Administrator access is required.');
-      return { ok: true };
     },
 
     apiRepair: async function (token) {
@@ -3332,12 +2866,6 @@
           }
         });
         await batch.commit();
-        for (const tid of goneIds) {
-          const cs = await db.collection('checklist').where('TaskID', '==', tid).get();
-          const cb = db.batch();
-          cs.forEach(c => cb.delete(c.ref));
-          if (!cs.empty) await cb.commit();
-        }
         memoClear();
         return { people: pCount, tasks: tCount };
       };
@@ -3370,11 +2898,11 @@
 
       const dayOffset = d => new Date(Date.now() + d * 86400000);
       const specs = [
-        ['Prepare salary register', 'Prepare the monthly salary register.', 'DEMO-AC1', 'DEMO-AS', 3, 'In Progress', ['Collect attendance', 'Cross-check totals']],
-        ['Upload donor list', 'Update donor list in the system.', 'DEMO-AC1', 'DEMO-AS', -2, 'Pending', ['Export from software', 'Remove duplicates']],
-        ['Bank reconciliation', 'Match bank statement with ERP entries.', 'DEMO-AC2', 'DEMO-AS', 0, 'Pending', []],
-        ['File TDS return', 'Prepare and review quarterly TDS return.', 'DEMO-AC2', 'DEMO-AS', -5, 'In Progress', ['Verify challans', 'Prepare file']],
-        ['Month-end closing checklist', 'Close the books for the month.', 'DEMO-AC2', 'DEMO-AS', -1, 'Completed', ['Post journals', 'Lock period']]
+        ['Prepare salary register', 'Prepare the monthly salary register.', 'DEMO-AC1', 'DEMO-AS', 3, 'In Progress'],
+        ['Upload donor list', 'Update donor list in the system.', 'DEMO-AC1', 'DEMO-AS', -2, 'Pending'],
+        ['Bank reconciliation', 'Match bank statement with ERP entries.', 'DEMO-AC2', 'DEMO-AS', 0, 'Pending'],
+        ['File TDS return', 'Prepare and review quarterly TDS return.', 'DEMO-AC2', 'DEMO-AS', -5, 'In Progress'],
+        ['Month-end closing checklist', 'Close the books for the month.', 'DEMO-AC2', 'DEMO-AS', -1, 'Completed']
       ];
       const tb = db.batch();
       specs.forEach((s, i) => {
@@ -3382,33 +2910,15 @@
         tb.set(db.collection('tasks').doc(id), {
           TaskID: id, Title: s[0], Description: s[1], AssignedBy: s[3], AssignedTo: s[2],
           Region: region, Division: 'Demo', DueDate: dayOffset(s[4]), Status: s[5],
-          IsConfidential: false, FileCount: 0, WatcherCodes: getWatcherCodes_(s[2], s[3], hier),
+          IsConfidential: false, WatcherCodes: getWatcherCodes_(s[2], s[3], hier),
+          ReceivedAt: s[5] === 'Pending' ? null : now,
           CreatedAt: now, UpdatedAt: now, CompletedAt: s[5] === 'Completed' ? now : null, LastReminderAt: null, ReminderCount: 0
-        });
-        s[6].forEach((text, j) => {
-          const itemId = tmId_('ITM');
-          tb.set(db.collection('checklist').doc(itemId), {
-            ItemID: itemId, TaskID: id, Text: text,
-            IsDone: s[5] === 'Completed' || (s[5] === 'In Progress' && j === 0) ? 'Y' : 'N',
-            DoneAt: null, SortOrder: j + 1, WatcherCodes: getWatcherCodes_(s[2], s[3], hier)
-          });
         });
       });
       await tb.commit();
       memoClear();
       return { ok: true, password: 'Demo accounts (display/analytics only)', people: demoPeople.length, tasks: specs.length };
-    },
-
-    // Legacy Google-Sheet-only import buttons: give clear Firebase guidance
-    apiImportEmployees: async function () {
-      return {
-        ok: false,
-        errors: ['Bulk spreadsheet import is for the Google Sheets edition. Use "+ Add person" above to create Firebase Auth accounts directly, or run AppsScript_Data_Migrator.gs for initial migration.']
-      };
-    },
-    apiClearEmployeesImport: async function () { return { ok: true, message: 'No import sheet needed in Firebase Edition.' }; },
-    apiCredentialRecipients: async function () { return { ok: true, recipients: [] }; },
-    apiSendImportedCredentials: async function () { throw new Error('Passwords are stored securely in Firebase Authentication. Use "Send Reset Email" inside a person\'s profile.'); }
+    }
   };
 
   window.FirebaseBackend = Backend;
