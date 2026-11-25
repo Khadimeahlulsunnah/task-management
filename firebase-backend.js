@@ -2113,7 +2113,7 @@
       return { ok: true };
     },
 
-    // 10. Task History & Formatted Notifications
+    // 10. Task History
     apiTaskHistory: async function (token, taskId) {
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
@@ -2137,84 +2137,6 @@
       });
       events.sort((a, b) => b.ts - a.ts);
       return { ok: true, events: events.slice(0, 50) };
-    },
-
-    apiGetNotifications: async function (token) {
-      const { user } = await tmAuth_(token);
-      const access = await tmAccess_(user);
-      const hier = await tmHierarchy_();
-      const q = (access.admin || access.headOffice)
-        ? db.collection('taskHistory').orderBy('Timestamp', 'desc').limit(80)
-        : db.collection('taskHistory').where('WatcherCodes', 'array-contains', access.code).orderBy('Timestamp', 'desc').limit(80);
-
-      const snap = await q.get();
-      const taskCache = {};
-      const allVisible = await tmFetchVisibleTasks_(access, 'team').catch(() => []);
-      allVisible.forEach(t => { taskCache[String(t.TaskID)] = t; });
-      const mineSnap = await db.collection('tasks').where('AssignedTo', '==', access.code).get();
-      mineSnap.forEach(d => { taskCache[d.id] = d.data(); });
-
-      const notifs = [];
-      for (const d of snap.docs) {
-        const e = d.data();
-        const actor = String(e.ActorEmpCode || '');
-        if (actor === user.EmpCode) continue;
-        const taskId = String(e.TaskID || '');
-        const task = taskCache[taskId];
-        if (!task) continue;
-        if (!tmCanSee_(access, task)) continue;
-
-        let title = tmSafeTaskTitleForEmail_(task);
-        if (task.IsConfidential && window.CryptoVault && window.CryptoVault.isUnlocked(access.code) && task.KeyEnvelopes) {
-          try {
-            const dek = await window.CryptoVault.unwrapDekFromEnvelopes(task.KeyEnvelopes, access.code);
-            if (dek && task.TitleEnc) title = await window.CryptoVault.decryptText(dek, task.TitleEnc);
-          } catch (ignore) { /* keep safe title */ }
-        }
-
-        const action = String(e.Action || '');
-        const actorName = String(e.ActorName || (hier.byCode[actor] && hier.byCode[actor].EmpName) || 'Someone');
-        let details = {};
-        try { details = JSON.parse(e.Details || '{}'); } catch (ignore) {}
-
-        let text = '', type = 'info';
-        if (action === 'TASK_CREATED') {
-          text = `${actorName} assigned a new task: "${title}"`;
-          type = 'task_assigned';
-        } else if (action === 'TASK_STATUS_CHANGED' || action === 'STATUS_CHANGE') {
-          const toStatus = details.status || details.to || details.Status || 'updated';
-          if (toStatus === 'Completed') {
-            text = `${actorName} completed task: "${title}"`;
-            type = 'task_completed';
-          } else {
-            text = `${actorName} changed status of "${title}" to ${toStatus}`;
-            type = 'status_change';
-          }
-        } else if (action === 'TASK_REOPENED') {
-          text = `${actorName} reopened task: "${title}"` + (details.remark ? ` (${details.remark})` : '');
-          type = 'task_reopened';
-        } else if (action === 'TASK_UPDATED') {
-          text = `${actorName} updated details for "${title}"`;
-          type = 'task_updated';
-        } else {
-          text = `${actorName} updated "${title}"`;
-          type = 'general';
-        }
-
-        notifs.push({
-          id: d.id,
-          taskId,
-          actorCode: actor,
-          actorName,
-          taskTitle: title,
-          action,
-          text,
-          type,
-          timestamp: tmIso_(e.Timestamp) || new Date().toISOString()
-        });
-        if (notifs.length >= 30) break;
-      }
-      return { ok: true, notifications: notifs };
     },
 
     // 11. Full Dashboard Analytics (Roles, Nazim, Location/Region, Trends, Drilldown)
