@@ -88,17 +88,6 @@ p{margin:.4em 0}small,.muted{color:var(--muted)}
 .st{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:700;white-space:nowrap}
 .st-Pending{background:#fde8e7;color:#b42318}.st-InProgress{background:var(--info-s);color:var(--info)}.st-Completed{background:var(--ok-s);color:var(--ok)}
 .bulkbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin:10px 0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}.bulkbar select{min-height:38px;max-width:180px}.bulkbar .muted{font-size:.86rem}.select-task{width:18px;height:18px;flex:none;accent-color:var(--brand)}.assignee-list{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);padding:6px}.assignee-option{display:flex;align-items:center;gap:9px;padding:7px 5px;border-bottom:1px solid var(--line);font-size:.92rem}.assignee-option:last-child{border:0}.assignee-option input{width:18px;height:18px;accent-color:var(--brand)}
-.dash-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;width:100%;min-width:0;box-sizing:border-box}
-.dash-bars{display:grid;gap:12px;width:100%;min-width:0;box-sizing:border-box}
-.dash-barrow{display:grid;grid-template-columns:minmax(100px,1.3fr) minmax(60px,2fr) auto;align-items:center;gap:4px 10px;font-size:.88rem;padding-bottom:8px;border-bottom:1px solid var(--line);min-width:0;box-sizing:border-box}
-.dash-bars .dash-barrow:last-child{border-bottom:0;padding-bottom:0}
-.dash-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink);min-width:0}
-.dash-track{height:9px;background:var(--track,#e8eef0);border-radius:999px;overflow:hidden;min-width:50px}
-.dash-track i{display:block;height:100%;background:var(--brand);border-radius:999px;transition:width .3s ease}
-.dash-barrow .num{text-align:right;font-weight:700;font-size:.95rem;color:var(--ink)}
-.dash-meta,.dash-barrow small{grid-column:1/-1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);line-height:1.3;margin-top:2px}
-.dash-meta .meta-sep{opacity:.5}
-.dash-meta .meta-late{color:var(--bad);font-weight:600}
 .manager-mail-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);padding:4px 10px}.manager-mail-option{display:flex;align-items:center;gap:9px;padding:9px 2px;border-bottom:1px solid var(--line)}.manager-mail-option:last-child{border:0}.manager-mail-option input{width:18px;height:18px;accent-color:var(--brand)}
 .empty{padding:44px 20px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line2);border-radius:10px}
 .empty b{display:block;color:var(--ink);font-size:1.05rem;margin-bottom:4px}
@@ -186,7 +175,6 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   
   .row{flex-wrap:wrap}.side{width:100%;justify-content:space-between;padding-left:36px}.due{text-align:left}
   .two{grid-template-columns:1fr}.kv{grid-template-columns:96px 1fr}
-  .dash-barrow{grid-template-columns:minmax(80px,1fr) minmax(48px,1.5fr) 32px}.dash-barrow small{grid-column:1/-1}
   .filters .search{flex-basis:100%}.filters select{flex:1 1 140px}
   .dhead{padding:14px 14px}.dbody{padding:14px;padding-bottom:calc(18px + env(safe-area-inset-bottom))}.dfoot{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
   .subtabs{overflow-x:auto;flex-wrap:nowrap}.subtab{white-space:nowrap;padding:10px 12px}
@@ -201,7 +189,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .avatar{color:var(--on-brand)}
 .tab:hover{background:var(--hover)}.row:hover,.tbl tr.click:hover td{background:var(--hover)}
 .tick{background:transparent}.is-done .tick{color:var(--on-brand)}
-.prog,.pbar,.meter,.dash-track{background:var(--track)}
+.prog,.pbar,.meter{background:var(--track)}
 .field input,.field select,.field textarea,.cell-in,.filters input,.filters select,.inline-add input,.seg button,.quick button,.plist{background:var(--surface)}
 .dfoot,.tile{background:var(--paper)}.checks li,.activity li,.tbl td,.tests li{border-color:var(--line)}
 .notice{color:var(--info)}.sw span{background:var(--line2)}.sw span:after{background:#fff}
@@ -312,90 +300,126 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .tpl-rm-btn{position:absolute;top:10px;right:10px;color:var(--muted)}
 .tpl-rm-btn:hover{color:var(--bad)}
 
-/* ================= Enhanced Dashboards (V10/V13 Mobile-Optimized) ================= */
-.dash-shell{display:grid;gap:16px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.dash-shell > *{min-width:0;max-width:100%;box-sizing:border-box}
-.dash-header-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 20px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.dash-header-top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
-.dash-header-title h2{font-size:1.3rem;margin:0;font-weight:700}
-.dash-header-title small{color:var(--muted)}
-.dash-filter-panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.dash-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.dash-active-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
-.filter-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;background:var(--surface);border:1px solid var(--line2);border-radius:999px;font-size:.8rem;font-weight:600}
-.filter-chip button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:.9rem;line-height:1;padding:0}
-.filter-chip button:hover{color:var(--bad)}
+/* ================= Pro Analytics Dashboard ================= */
+:root{--nx-indigo:#4f46e5;--nx-indigo-s:rgba(79,70,229,.12);--nx-sky:#0284c7;--nx-sky-s:rgba(2,132,199,.12);--nx-emerald:#10b981;--nx-emerald-s:rgba(16,185,129,.13);--nx-amber:#f59e0b;--nx-amber-s:rgba(245,158,11,.14);--nx-rose:#ef4444;--nx-rose-s:rgba(239,68,68,.13);--nx-slate:#475569}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--nx-indigo:#818cf8;--nx-indigo-s:rgba(129,140,248,.16);--nx-sky:#38bdf8;--nx-sky-s:rgba(56,189,248,.16);--nx-emerald:#34d399;--nx-emerald-s:rgba(52,211,153,.16);--nx-amber:#fbbf24;--nx-amber-s:rgba(251,191,36,.16);--nx-rose:#f87171;--nx-rose-s:rgba(248,113,113,.16);--nx-slate:#94a3b8}}
+:root[data-theme=dark]{--nx-indigo:#818cf8;--nx-indigo-s:rgba(129,140,248,.16);--nx-sky:#38bdf8;--nx-sky-s:rgba(56,189,248,.16);--nx-emerald:#34d399;--nx-emerald-s:rgba(52,211,153,.16);--nx-amber:#fbbf24;--nx-amber-s:rgba(251,191,36,.16);--nx-rose:#f87171;--nx-rose-s:rgba(248,113,113,.16);--nx-slate:#94a3b8}
 
-.dash-nav{display:flex;gap:6px;background:var(--soft);padding:4px;border-radius:14px;overflow-x:auto;scrollbar-width:none;width:100%;max-width:100%;min-width:0;box-sizing:border-box;-webkit-overflow-scrolling:touch}
-.dash-nav::-webkit-scrollbar{display:none}
-.dash-nav-tab{flex:0 0 auto;min-width:auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border:0;border-radius:10px;background:transparent;font-weight:600;font-size:.88rem;color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;-webkit-user-select:none;user-select:none}
-.dash-nav-tab:hover{color:var(--ink);background:var(--hover)}
-.dash-nav-tab[aria-pressed=true]{background:var(--surface);color:var(--brand-d);box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.dash-tab-badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:.75rem;background:var(--soft);color:var(--muted);font-weight:700}
-.dash-nav-tab[aria-pressed=true] .dash-tab-badge{background:var(--brand-s);color:var(--brand-d)}
+.nx-shell{display:grid;gap:16px;width:100%;max-width:100%;min-width:0}
+.nx-shell > *{min-width:0;max-width:100%}
 
-.kpi-deck{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.kpi-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;text-align:left;cursor:pointer;font:inherit;color:inherit;transition:all .18s;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;min-height:104px;min-width:0;box-sizing:border-box}
-.kpi-card:hover{transform:translateY(-2px);border-color:var(--line2);box-shadow:0 6px 18px rgba(0,0,0,.05)}
-.kpi-card[aria-pressed=true]{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand)}
-.kpi-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.kpi-card-label{font-size:.84rem;font-weight:600;color:var(--muted)}
-.kpi-card-val{font-size:1.85rem;font-weight:700;line-height:1.1}
-.kpi-card-sub{font-size:.78rem;color:var(--muted);margin-top:4px}
-.kpi-accent-total{border-top:4px solid #64748b}
-.kpi-accent-pending{border-top:4px solid #e07a10}
-.kpi-accent-prog{border-top:4px solid var(--brand)}
-.kpi-accent-done{border-top:4px solid var(--ok)}
-.kpi-accent-overdue{border-top:4px solid var(--bad)}
+.nx-topbar{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 20px 0;display:grid;gap:14px;box-shadow:0 2px 12px rgba(15,23,42,.04);overflow:hidden}
+.nx-toprow{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.nx-title h2{margin:0;font-size:1.28rem;font-weight:700;letter-spacing:-.015em;color:var(--ink)}
+.nx-title p{margin:3px 0 0;font-size:.84rem;color:var(--muted)}
+.nx-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
-.perf-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow:hidden}
-.perf-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:8px}
-.perf-meter{height:16px;border-radius:8px;background:var(--track);overflow:hidden;display:flex;margin:10px 0 12px}
-.perf-meter i{display:block;height:100%;transition:width .4s cubic-bezier(.2,.8,.2,1)}
-.perf-legend{display:flex;flex-wrap:wrap;gap:14px 20px;font-size:.84rem;color:var(--muted)}
-.perf-legend-item{display:inline-flex;align-items:center;gap:6px}
-.legend-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.nx-filters{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.nx-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.nx-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--nx-indigo-s);color:var(--nx-indigo);font-size:.8rem;font-weight:600}
+.nx-chip button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size:.9rem;line-height:1}
 
-.radar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.radar-box{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0;box-sizing:border-box}
-.radar-box b{font-size:1.4rem;display:block}
-.radar-box span{font-size:.84rem;color:var(--muted)}
-.radar-box.alert b{color:var(--bad)}
+.nx-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:0;border-top:1px solid var(--line);margin:0 -20px;padding:6px 20px 0;background:linear-gradient(180deg,transparent,rgba(15,23,42,.015))}
+.nx-tabs::-webkit-scrollbar{display:none}
+.nx-tab{flex:0 0 auto;position:relative;display:inline-flex;align-items:center;gap:7px;padding:11px 15px 13px;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:.9rem;cursor:pointer;white-space:nowrap;border-radius:10px 10px 0 0;transition:color .15s,background .15s}
+.nx-tab:hover{color:var(--ink);background:var(--hover)}
+.nx-tab[aria-pressed=true]{color:var(--nx-indigo);background:transparent}
+.nx-tab[aria-pressed=true]::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--nx-indigo)}
+.nx-tab-cnt{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;font-size:.74rem;font-weight:700;background:var(--soft);color:var(--muted)}
+.nx-tab[aria-pressed=true] .nx-tab-cnt{background:var(--nx-indigo-s);color:var(--nx-indigo)}
+.nx-tab-cnt.alert{background:var(--nx-rose-s);color:var(--nx-rose)}
 
-.trends-strip{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:thin;width:100%;max-width:100%;min-width:0;box-sizing:border-box;-webkit-overflow-scrolling:touch}
-.trend-item{flex:0 0 auto;min-width:100px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;box-sizing:border-box}
-.trend-item .month-label{font-size:.78rem;font-weight:700;color:var(--muted);margin-bottom:4px}
-.trend-item .created-val{font-size:1.05rem;font-weight:700;color:var(--ink)}
-.trend-item .done-val{font-size:.85rem;font-weight:600;color:var(--ok)}
+.nx-hero{background:linear-gradient(135deg,#0f172a 0%,#1e293b 55%,#312e81 100%);color:#f8fafc;border-radius:18px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;box-shadow:0 10px 28px rgba(15,23,42,.18)}
+.nx-hero-text{flex:1 1 280px;min-width:0}
+.nx-hero-kicker{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.12);font-size:.76rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#c7d2fe;margin-bottom:8px}
+.nx-hero h3{margin:0;font-size:1.2rem;font-weight:700;line-height:1.35;color:#fff}
+.nx-hero p{margin:6px 0 0;font-size:.9rem;color:#cbd5e1;line-height:1.45}
+.nx-hero-gauge{flex:none;display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:12px 16px}
+.nx-hero-gauge strong{display:block;font-size:1.35rem;line-height:1.1;color:#fff}
+.nx-hero-gauge span{font-size:.78rem;color:#cbd5e1}
 
-.workload-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.employee-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;transition:border-color .15s,box-shadow .15s;min-width:0;box-sizing:border-box}
-.employee-card:hover{border-color:var(--line2);box-shadow:0 4px 14px rgba(0,0,0,.04)}
-.emp-card-header{display:flex;align-items:center;gap:10px}
-.emp-card-avatar{width:36px;height:36px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.85rem;flex:none}
-.emp-card-info{flex:1;min-width:0}
-.emp-card-name{font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.emp-card-role{font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.emp-card-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;padding:8px 10px;background:var(--paper);border-radius:10px;font-size:.8rem}
-.emp-card-stats b{display:block;font-size:1.05rem}
-.emp-card-stats .stat-lbl{font-size:.72rem;color:var(--muted)}
-.emp-progress-bar{height:7px;border-radius:4px;background:var(--track);overflow:hidden}
-.emp-progress-bar i{display:block;height:100%;background:var(--brand);border-radius:4px}
+.nx-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.nx-kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 16px;text-align:left;cursor:pointer;font:inherit;color:inherit;display:grid;gap:6px;transition:transform .15s,box-shadow .15s,border-color .15s;position:relative;overflow:hidden}
+.nx-kpi:hover{transform:translateY(-2px);border-color:var(--line2);box-shadow:0 8px 20px rgba(15,23,42,.06)}
+.nx-kpi[aria-pressed=true]{box-shadow:0 0 0 2px var(--nx-indigo);border-color:var(--nx-indigo)}
+.nx-kpi-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nx-kpi-lbl{font-size:.82rem;font-weight:600;color:var(--muted)}
+.nx-kpi-dot{width:10px;height:10px;border-radius:50%;flex:none}
+.nx-kpi-val{font-size:1.9rem;font-weight:700;line-height:1.05;color:var(--ink)}
+.nx-kpi-sub{font-size:.78rem;color:var(--muted)}
+.nx-kpi.k-indigo .nx-kpi-dot{background:var(--nx-indigo)}
+.nx-kpi.k-amber .nx-kpi-dot{background:var(--nx-amber)}
+.nx-kpi.k-sky .nx-kpi-dot{background:var(--nx-sky)}
+.nx-kpi.k-emerald .nx-kpi-dot{background:var(--nx-emerald)}
+.nx-kpi.k-rose .nx-kpi-dot{background:var(--nx-rose)}
+.nx-kpi.k-rose{background:linear-gradient(180deg,var(--surface) 50%,var(--nx-rose-s) 150%)}
 
-.task-explorer-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px;display:grid;gap:14px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
-.explorer-toolbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
-.status-pill-group{display:flex;gap:4px;flex-wrap:wrap}
-.status-pill{padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:.84rem;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s}
-.status-pill:hover{border-color:var(--line2);color:var(--ink)}
-.status-pill[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
-.status-pill.over[aria-pressed=true]{background:var(--bad);border-color:var(--bad);color:#fff}
+.nx-grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.nx-grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.nx-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;display:grid;gap:14px;align-content:start;min-width:0;overflow:hidden}
+.nx-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.nx-card-head h3{margin:0;font-size:1.04rem;font-weight:700;color:var(--ink)}
+.nx-card-head small{display:block;color:var(--muted);font-size:.82rem;margin-top:2px}
 
-.explorer-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%;font:inherit;transition:all .15s;min-width:0;box-sizing:border-box}
-.explorer-item:hover{background:var(--hover);border-color:var(--line2);transform:translateX(2px)}
-.explorer-item-main{flex:1;min-width:0}
-.explorer-item-title{font-weight:600;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.explorer-item-sub{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.82rem;color:var(--muted);margin-top:3px;align-items:center}
-.explorer-item-side{display:flex;align-items:center;gap:10px;flex:none}
+.nx-donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.nx-donut-svg{width:168px;height:168px;flex:none}
+.nx-legend{flex:1 1 180px;display:grid;gap:10px;min-width:0}
+.nx-leg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.88rem;padding:7px 10px;border-radius:10px;background:var(--paper);border:1px solid var(--line);cursor:pointer;text-align:left;width:100%}
+.nx-leg-row:hover{border-color:var(--line2);background:var(--hover)}
+.nx-leg-left{display:flex;align-items:center;gap:8px;min-width:0}
+.nx-leg-sw{width:11px;height:11px;border-radius:3px;flex:none}
+.nx-leg-name{font-weight:600;color:var(--ink)}
+.nx-leg-right{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.nx-leg-right b{font-size:.96rem;color:var(--ink)}
+.nx-leg-right span{font-size:.78rem;color:var(--muted)}
+
+.nx-hbar-list{display:grid;gap:11px}
+.nx-hbar-btn{border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:10px 12px;display:grid;gap:6px;cursor:pointer;text-align:left;font:inherit;color:inherit;transition:background .15s,border-color .15s}
+.nx-hbar-btn:hover{background:var(--hover);border-color:var(--line2)}
+.nx-hbar-top{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.88rem;font-weight:600}
+.nx-hbar-track{height:9px;border-radius:999px;background:var(--track);overflow:hidden;display:flex}
+.nx-hbar-track i{display:block;height:100%;transition:width .35s ease}
+.nx-hbar-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+
+.nx-chart-box{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.nx-chart-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}
+.nx-chart-legend span{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.nx-chart-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+.nx-mini-list{display:grid;gap:8px}
+.nx-mini-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper);cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit;transition:border-color .15s,background .15s}
+.nx-mini-item:hover{background:var(--hover);border-color:var(--line2)}
+.nx-mini-main{min-width:0;flex:1}
+.nx-mini-title{font-weight:600;font-size:.9rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-mini-sub{font-size:.78rem;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:.75rem;font-weight:700;white-space:nowrap;flex:none}
+.nx-pill.rose{background:var(--nx-rose-s);color:var(--nx-rose)}
+.nx-pill.amber{background:var(--nx-amber-s);color:var(--warn)}
+.nx-pill.emerald{background:var(--nx-emerald-s);color:var(--ok)}
+.nx-pill.sky{background:var(--nx-sky-s);color:var(--nx-sky)}
+.nx-pill.indigo{background:var(--nx-indigo-s);color:var(--nx-indigo)}
+
+.nx-staff-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 15px;display:grid;gap:11px;transition:border-color .15s,box-shadow .15s}
+.nx-staff-card:hover{border-color:var(--line2);box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.nx-staff-top{display:flex;align-items:center;gap:10px}
+.nx-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--nx-indigo),var(--nx-sky));color:#fff;display:grid;place-items:center;font-weight:700;font-size:.86rem;flex:none}
+.nx-staff-info{min-width:0;flex:1}
+.nx-staff-name{font-weight:700;font-size:.94rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-staff-role{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-staff-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center}
+.nx-staff-nums b{display:block;font-size:1.05rem;line-height:1.15}
+.nx-staff-nums span{font-size:.72rem;color:var(--muted)}
+.nx-stack-bar{height:8px;border-radius:999px;background:var(--track);overflow:hidden;display:flex}
+.nx-stack-bar i{display:block;height:100%}
+
+.nx-filter-pills{display:flex;gap:6px;flex-wrap:wrap}
+.nx-fpill{padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:.84rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.nx-fpill:hover{border-color:var(--line2);color:var(--ink)}
+.nx-fpill[aria-pressed=true]{background:var(--nx-indigo);border-color:var(--nx-indigo);color:#fff}
+.nx-fpill.rose[aria-pressed=true]{background:var(--nx-rose);border-color:var(--nx-rose);color:#fff}
+
+.nx-task-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%;font:inherit;transition:background .15s,border-color .15s}
+.nx-task-row:hover{background:var(--hover);border-color:var(--line2)}
 
 /* Pop-up modal screen for per-task due date & description */
 .task-modal-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:tmFadeIn .16s ease-out}
@@ -436,230 +460,29 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
     margin-bottom: 12px !important;
   }
   
-  /* Dashboard Header & Navigation */
-  .dash-shell { gap: 12px !important; }
-  .dash-header-card {
-    padding: 12px 14px !important;
-    border-radius: 14px !important;
-    gap: 10px !important;
-  }
-  .dash-header-top {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  .dash-header-title h2 { font-size: 1.15rem !important; }
-  .dash-header-title small { font-size: .78rem !important; line-height: 1.3 !important; display: block !important; }
-  .dash-header-top .actions {
-    display: flex !important;
-    gap: 6px !important;
-    width: 100% !important;
-    flex-wrap: nowrap !important;
-  }
-  .dash-header-top .actions button {
-    flex: 1 1 auto !important;
-    min-height: 34px !important;
-    padding: 0 6px !important;
-    font-size: .78rem !important;
-    justify-content: center !important;
-    white-space: nowrap !important;
-  }
-  .dash-filter-panel {
-    padding: 10px 12px !important;
-    border-radius: 10px !important;
-    gap: 8px !important;
-  }
-  .dash-filter-grid {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
-  }
-  .dash-nav {
-    padding: 3px !important;
-    gap: 4px !important;
-    border-radius: 12px !important;
-  }
-  .dash-nav-tab {
-    padding: 7px 11px !important;
-    font-size: .82rem !important;
-    gap: 4px !important;
-  }
-  
-  /* KPI Deck: 2 Columns on Mobile with Overdue Alert Spanning Bottom */
-  .kpi-deck {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-  .kpi-card {
-    padding: 10px 12px !important;
-    min-height: 80px !important;
-    border-radius: 12px !important;
-  }
-  .kpi-card:last-child {
-    grid-column: 1 / -1 !important;
-  }
-  .kpi-deck > .sk:last-child {
-    grid-column: 1 / -1 !important;
-  }
-  .kpi-card-val {
-    font-size: 1.45rem !important;
-  }
-  .kpi-card-label {
-    font-size: .78rem !important;
-  }
-  .kpi-card-sub {
-    font-size: .72rem !important;
-    margin-top: 2px !important;
-  }
-  
-  /* Performance Card */
-  .perf-card {
-    padding: 12px 14px !important;
-    border-radius: 14px !important;
-  }
-  .perf-header {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 4px !important;
-  }
-  .perf-header > div:last-child {
-    text-align: left !important;
-    display: flex !important;
-    align-items: baseline !important;
-    gap: 6px !important;
-  }
-  .perf-meter {
-    height: 12px !important;
-    margin: 8px 0 10px !important;
-    border-radius: 6px !important;
-  }
-  .perf-legend {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 6px 8px !important;
-    font-size: .76rem !important;
-  }
-  .perf-legend-item {
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-  
-  /* Radar Grid */
-  .radar-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
-  }
-  .radar-box.alert {
-    grid-column: 1 / -1 !important;
-  }
-  .radar-box {
-    padding: 10px 12px !important;
-    border-radius: 10px !important;
-  }
-  .radar-box b {
-    font-size: 1.25rem !important;
-  }
-  .radar-box span {
-    font-size: .78rem !important;
-  }
-  
-  /* Trends Strip */
-  .trends-strip {
-    gap: 8px !important;
-    padding: 2px 0 6px !important;
-  }
-  .trend-item {
-    flex: 0 0 82px !important;
-    min-width: 82px !important;
-    padding: 8px 4px !important;
-    border-radius: 8px !important;
-  }
-  
-  /* Team Workload Grid */
-  .workload-grid {
-    grid-template-columns: 1fr !important;
-    gap: 10px !important;
-  }
-  .employee-card {
-    padding: 12px 14px !important;
-    border-radius: 12px !important;
-  }
-  .emp-card-header {
-    gap: 8px !important;
-  }
-  .emp-card-name {
-    font-size: .9rem !important;
-  }
-  .emp-card-role {
-    font-size: .76rem !important;
-  }
-  .emp-card-stats {
-    padding: 6px 8px !important;
-    gap: 4px !important;
-    font-size: .75rem !important;
-  }
-  .emp-card-stats b {
-    font-size: .95rem !important;
-  }
-  .emp-card-stats .stat-lbl {
-    font-size: .68rem !important;
-  }
-  
-  /* Dash Bars Breakdown */
-  .dash-bars { gap: 10px !important; }
-  .dash-barrow {
-    grid-template-columns: minmax(70px, 1.2fr) minmax(40px, 1fr) auto !important;
-    gap: 4px 8px !important;
-    font-size: .82rem !important;
-  }
-  .dash-label {
-    font-size: .82rem !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-  }
-  .dash-meta, .dash-barrow small {
-    grid-column: 1 / -1 !important;
-    font-size: .75rem !important;
-    color: var(--muted) !important;
-    margin-top: 1px !important;
-  }
-  
-  /* Task Explorer */
-  .task-explorer-card {
-    padding: 12px 14px !important;
-    border-radius: 14px !important;
-    gap: 10px !important;
-  }
-  .explorer-toolbar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-  }
-  .status-pill-group {
-    display: flex !important;
-    gap: 6px !important;
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding: 2px 2px 6px !important;
-    max-width: 100% !important;
-    scrollbar-width: none !important;
-  }
-  .status-pill-group::-webkit-scrollbar { display: none !important; }
-  .status-pill {
-    flex: 0 0 auto !important;
-    white-space: nowrap !important;
-    padding: 5px 10px !important;
-    font-size: .78rem !important;
-  }
-  .explorer-item {
-    padding: 10px 12px !important;
-    gap: 8px !important;
-    border-radius: 10px !important;
-  }
-  .explorer-item-title { font-size: .88rem !important; }
-  .explorer-item-sub { gap: 2px 8px !important; font-size: .76rem !important; }
+  /* New Pro Dashboard Responsive Rules */
+  .nx-shell{gap:12px!important}
+  .nx-topbar{padding:12px 14px 0!important;border-radius:14px!important;gap:10px!important}
+  .nx-toprow{flex-direction:column!important;align-items:stretch!important;gap:10px!important}
+  .nx-controls{width:100%!important}.nx-controls button{flex:1 1 auto!important;min-height:36px!important;font-size:.82rem!important}
+  .nx-filters{grid-template-columns:1fr!important;padding:10px 12px!important}
+  .nx-tabs{margin:0 -14px!important;padding:4px 14px 0!important;gap:2px!important}
+  .nx-tab{padding:9px 11px 11px!important;font-size:.83rem!important}
+  .nx-hero{padding:15px 16px!important;border-radius:14px!important;gap:12px!important}
+  .nx-hero h3{font-size:1.05rem!important}
+  .nx-hero-gauge{width:100%;justify-content:space-between}
+  .nx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .nx-kpi{padding:12px!important;border-radius:12px!important}
+  .nx-kpi:last-child{grid-column:1/-1!important}
+  .nx-kpi-val{font-size:1.5rem!important}
+  .nx-grid-2{grid-template-columns:1fr!important;gap:12px!important}
+  .nx-grid-3{grid-template-columns:1fr!important;gap:10px!important}
+  .nx-card{padding:14px!important;border-radius:14px!important;gap:12px!important}
+  .nx-donut-wrap{justify-content:center;gap:14px!important}
+  .nx-donut-svg{width:146px!important;height:146px!important}
+  .nx-filter-pills{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;padding-bottom:4px}
+  .nx-filter-pills::-webkit-scrollbar{display:none}
+  .nx-task-row{flex-direction:column!important;align-items:stretch!important;gap:8px!important}
   
   /* Task Rows & Filters */
   .row { flex-wrap: wrap !important; padding: 10px 12px !important; gap: 8px 10px !important; }
@@ -823,7 +646,7 @@ const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
+const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -1075,15 +898,15 @@ function showView(v) {
 
 function dashboardSelect(key, label, options, placeholder) {
   const selected = S.dashFilters[key] || '';
-  return h`<label class="field" style="margin:0;min-width:0;flex:1 1 130px;width:100%"><span style="font-size:.82rem">${label}</span><select data-ch="dashfilter" data-k="${key}"><option value="">${placeholder || 'All'}</option>${options.map(x => { const val = typeof x === 'string' ? x : x.code, text = typeof x === 'string' ? x : x.name + ' · ' + x.code; return h`<option value="${val}" ${selected === val ? 'selected' : ''}>${text}</option>`; })}</select></label>`;
+  return h`<label class="field" style="margin:0;min-width:0;width:100%"><span style="font-size:.82rem">${label}</span><select data-ch="dashfilter" data-k="${key}"><option value="">${placeholder || 'All'}</option>${options.map(x => { const val = typeof x === 'string' ? x : x.code, text = typeof x === 'string' ? x : x.name + ' · ' + x.code; return h`<option value="${val}" ${selected === val ? 'selected' : ''}>${text}</option>`; })}</select></label>`;
 }
 
 function renderDashboardShell() {
-  const d = S.dashboard, o = d && d.options || { locations: [], regions: [], roles: [], employees: [], nazims: [] };
+  const d = S.dashboard, o = (d && d.options) || { locations: [], regions: [], roles: [], employees: [], nazims: [] };
   const isAdmin = !!(S.boot && S.boot.user && S.boot.user.isAdmin);
   const activeCount = Object.keys(S.dashFilters).filter(k => S.dashFilters[k] && k !== 'offset').length;
   const activeFilters = [];
-  if (S.dashFilters.location) activeFilters.push({ k: 'location', label: 'Division: ' + S.dashFilters.location });
+  if (S.dashFilters.location) activeFilters.push({ k: 'location', label: 'Office: ' + S.dashFilters.location });
   if (S.dashFilters.region) activeFilters.push({ k: 'region', label: 'Region: ' + S.dashFilters.region });
   if (S.dashFilters.role) activeFilters.push({ k: 'role', label: 'Role: ' + S.dashFilters.role });
   if (S.dashFilters.nazim) {
@@ -1094,50 +917,46 @@ function renderDashboardShell() {
     const e = (o.employees || []).find(x => x.code === S.dashFilters.employee);
     activeFilters.push({ k: 'employee', label: 'Person: ' + (e ? e.name : S.dashFilters.employee) });
   }
-  if (S.dashFilters.status) activeFilters.push({ k: 'status', label: 'Status: ' + S.dashFilters.status });
+  if (S.dashFilters.status) activeFilters.push({ k: 'status', label: 'Showing: ' + (S.dashFilters.status === 'Overdue' ? 'Late' : S.dashFilters.status) });
 
-  S.dashTab = S.dashTab || 'overview';
+  const validTabs = ['overview', 'team', 'deadlines', 'areas', 'tasks'];
+  if (!validTabs.includes(S.dashTab)) S.dashTab = 'overview';
+  const overdueCnt = d && d.counts ? (d.counts.Overdue || 0) : 0;
+  const empCnt = d && d.byEmployee ? d.byEmployee.length : 0;
+  const taskCnt = d && d.drilldown ? d.drilldown.total : 0;
 
-  mount($('#view'), h`<div class="dash-shell">
-    <div class="dash-header-card">
-      <div class="dash-header-top">
-        <div class="dash-header-title">
-          <h2>Task Analytics Dashboard</h2>
-          <small>${d ? 'Updated ' + d.asOf : 'Loading dashboard metrics…'} · Automated periodic sync</small>
+  mount($('#view'), h`<div class="nx-shell">
+    <header class="nx-topbar">
+      <div class="nx-toprow">
+        <div class="nx-title">
+          <h2>Team Dashboard</h2>
+          <p>${d ? 'Updated ' + d.asOf : 'Loading your team summary…'}</p>
         </div>
-        <div class="actions">
-          <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filter controls ▾'}${activeCount ? h` <span class="badge b-PASS">${activeCount}</span>` : ''}</button>
-          ${activeCount ? h`<button type="button" class="btn sm danger" data-act="dashreset">Reset filters</button>` : ''}
-          <button type="button" class="btn sm primary" data-act="refreshdashboard" data-busy="Refreshing">Refresh</button>
+        <div class="nx-controls">
+          <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filters ▾'}${activeCount ? h` <span class="nx-tab-cnt">${activeCount}</span>` : ''}</button>
+          ${activeCount ? h`<button type="button" class="btn sm danger" data-act="dashreset">Clear</button>` : ''}
+          <button type="button" class="btn sm primary" data-act="refreshdashboard" data-busy="Updating">Refresh</button>
         </div>
       </div>
-      <div id="dash-filter-container" class="dash-filter-panel" ${S.dashFilterOpen ? '' : 'hidden'}>
-        <div class="dash-filter-grid">
-          ${isAdmin ? dashboardSelect('location', 'Division / Location', o.locations, 'All divisions') : ''}
-          ${isAdmin ? dashboardSelect('region', 'Region', o.regions, 'All regions') : ''}
-          ${isAdmin ? dashboardSelect('role', 'Role', o.roles, 'All roles') : ''}
-          ${isAdmin ? dashboardSelect('nazim', 'Nazim / Manager', o.nazims, 'All Nazims') : ''}
-          ${dashboardSelect('employee', 'Employee', o.employees, 'All employees')}
-        </div>
+
+      <div id="dash-filter-container" class="nx-filters" ${S.dashFilterOpen ? '' : 'hidden'}>
+        ${isAdmin ? dashboardSelect('location', 'Office / Division', o.locations, 'All offices') : ''}
+        ${isAdmin ? dashboardSelect('region', 'Region', o.regions, 'All regions') : ''}
+        ${isAdmin ? dashboardSelect('role', 'Job Role', o.roles, 'All roles') : ''}
+        ${isAdmin ? dashboardSelect('nazim', 'Nazim', o.nazims, 'All Nazims') : ''}
+        ${dashboardSelect('employee', 'Team Member', o.employees, 'Everyone')}
       </div>
-      ${activeFilters.length ? h`<div class="dash-active-filters"><small class="muted" style="font-weight:600">Active filters:</small>${activeFilters.map(f => h`<span class="filter-chip">${f.label}<button type="button" data-act="dashclearfilter" data-k="${f.k}" title="Clear this filter">✕</button></span>`)}<button type="button" class="btn ghost sm" style="padding:1px 7px;font-size:.76rem" data-act="dashreset">Clear all</button></div>` : ''}
-      <nav class="dash-nav" role="tablist" aria-label="Dashboard views">
-        <button type="button" class="dash-nav-tab" role="tab" data-act="dashtab" data-t="overview" aria-pressed="${S.dashTab === 'overview'}">
-          <span>📊 Overview</span>
-        </button>
-        <button type="button" class="dash-nav-tab" role="tab" data-act="dashtab" data-t="workload" aria-pressed="${S.dashTab === 'workload'}">
-          <span>👥 Team Workload</span>
-          ${d ? h`<span class="dash-tab-badge">${(d.byEmployee || []).length}</span>` : ''}
-        </button>
-        <button type="button" class="dash-nav-tab" role="tab" data-act="dashtab" data-t="org" aria-pressed="${S.dashTab === 'org'}">
-          <span>🏢 Org & Regions</span>
-        </button>
-        <button type="button" class="dash-nav-tab" role="tab" data-act="dashtab" data-t="drilldown" aria-pressed="${S.dashTab === 'drilldown'}">
-          <span>📋 Task Explorer</span>
-          ${d && d.drilldown ? h`<span class="dash-tab-badge">${d.drilldown.total}</span>` : ''}
-        </button>
+
+      ${activeFilters.length ? h`<div class="nx-chips"><small class="muted" style="font-weight:600">Filtered by:</small>${activeFilters.map(f => h`<span class="nx-chip">${f.label}<button type="button" data-act="dashclearfilter" data-k="${f.k}" title="Remove filter">✕</button></span>`)}</div>` : ''}
+
+      <nav class="nx-tabs" role="tablist" aria-label="Dashboard sections">
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="overview" aria-pressed="${S.dashTab === 'overview'}">Overview</button>
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="team" aria-pressed="${S.dashTab === 'team'}">People ${d ? h`<span class="nx-tab-cnt">${empCnt}</span>` : ''}</button>
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="deadlines" aria-pressed="${S.dashTab === 'deadlines'}">Deadlines ${overdueCnt ? h`<span class="nx-tab-cnt alert">${overdueCnt} late</span>` : ''}</button>
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="areas" aria-pressed="${S.dashTab === 'areas'}">Areas &amp; Roles</button>
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="tasks" aria-pressed="${S.dashTab === 'tasks'}">Find Tasks ${d ? h`<span class="nx-tab-cnt">${taskCnt}</span>` : ''}</button>
       </nav>
-    </div>
+    </header>
     <div id="dashboard-content"></div>
   </div>`);
   paintDashboard();
@@ -1147,232 +966,437 @@ function paintDashboard() {
   const box = $('#dashboard-content'); if (!box) return;
   const d = S.dashboard;
   if (!d) {
-    mount(box, h`<div class="panel" style="width:100%;max-width:100%;box-sizing:border-box"><div class="sk" style="height:24px;width:35%;margin-bottom:14px"></div><div class="kpi-deck">${[1,2,3,4,5].map(() => h`<div class="sk" style="height:86px;border-radius:12px"></div>`)}</div><div class="sk" style="height:120px;border-radius:12px;margin-top:14px"></div></div>`);
+    mount(box, h`<div style="display:grid;gap:14px"><div class="sk" style="height:112px;border-radius:18px"></div><div class="nx-kpis">${[1,2,3,4,5].map(() => h`<div class="sk" style="height:98px;border-radius:16px"></div>`)}</div><div class="nx-grid-2"><div class="sk" style="height:220px;border-radius:18px"></div><div class="sk" style="height:220px;border-radius:18px"></div></div></div>`);
     return;
   }
   if (S.dashTab === 'overview') paintDashboardOverview(box, d);
-  else if (S.dashTab === 'workload') paintDashboardWorkload(box, d);
-  else if (S.dashTab === 'org') paintDashboardOrg(box, d);
-  else if (S.dashTab === 'drilldown') paintDashboardExplorer(box, d);
+  else if (S.dashTab === 'team') paintDashboardTeam(box, d);
+  else if (S.dashTab === 'deadlines') paintDashboardDeadlines(box, d);
+  else if (S.dashTab === 'areas') paintDashboardAreas(box, d);
+  else paintDashboardTasks(box, d);
 }
 
-function paintDashboardOverview(box, d) {
-  const c = d.counts, active = S.dashFilters.status || '';
-  const pct = v => c.Total ? Math.round(v * 1000 / c.Total) / 10 : 0;
-  const overdueRate = d.overdueRate || (c.Total ? Math.round(c.Overdue * 1000 / c.Total) / 10 : 0);
-  const openCount = (c.Pending || 0) + (c['In Progress'] || 0);
-
-  const kpi = (status, title, val, sub, accentClass) => h`
-    <button type="button" class="kpi-card ${accentClass}" data-act="dashkpi" data-status="${status}" aria-pressed="${active === status}">
-      <div class="kpi-card-top"><span class="kpi-card-label">${title}</span></div>
-      <div class="kpi-card-val num">${val}</div>
-      <div class="kpi-card-sub">${sub}</div>
-    </button>`;
-
-  mount(box, h`<div style="display:grid;gap:16px;width:100%;max-width:100%;min-width:0">
-    <div class="kpi-deck">
-      ${kpi('', 'Total Tasks', c.Total, 'All filtered tasks', 'kpi-accent-total')}
-      ${kpi('Pending', 'Pending', c.Pending || 0, pct(c.Pending || 0) + '% awaiting start', 'kpi-accent-pending')}
-      ${kpi('In Progress', 'In Progress', c['In Progress'] || 0, pct(c['In Progress'] || 0) + '% actively worked', 'kpi-accent-prog')}
-      ${kpi('Completed', 'Completed', c.Completed || 0, d.completionRate + '% achievement rate', 'kpi-accent-done')}
-      ${kpi('Overdue', 'Overdue Alert', c.Overdue || 0, overdueRate + '% past deadline', 'kpi-accent-overdue')}
-    </div>
-
-    <div class="perf-card">
-      <div class="perf-header">
-        <div><h3 style="margin:0">Health & Completion Progress</h3><small class="muted">Status distribution across ${c.Total} total tasks</small></div>
-        <div style="text-align:right"><b class="num" style="font-size:1.4rem;color:var(--ok)">${d.completionRate}%</b><small class="muted" style="display:block">Completion Rate</small></div>
-      </div>
-      <div class="perf-meter" aria-hidden="true">
-        <i title="Completed: ${pct(c.Completed || 0)}%" style="width:${pct(c.Completed || 0)}%;background:var(--ok)"></i>
-        <i title="In Progress: ${pct(c['In Progress'] || 0)}%" style="width:${pct(c['In Progress'] || 0)}%;background:var(--brand)"></i>
-        <i title="Pending: ${pct(c.Pending || 0)}%" style="width:${pct(c.Pending || 0)}%;background:#e07a10"></i>
-      </div>
-      <div class="perf-legend">
-        <div class="perf-legend-item"><span class="legend-dot" style="background:var(--ok)"></span><span><b>${c.Completed || 0}</b> Completed (${pct(c.Completed || 0)}%)</span></div>
-        <div class="perf-legend-item"><span class="legend-dot" style="background:var(--brand)"></span><span><b>${c['In Progress'] || 0}</b> In Progress (${pct(c['In Progress'] || 0)}%)</span></div>
-        <div class="perf-legend-item"><span class="legend-dot" style="background:#e07a10"></span><span><b>${c.Pending || 0}</b> Pending (${pct(c.Pending || 0)}%)</span></div>
-        <div class="perf-legend-item"><span class="legend-dot" style="background:var(--bad)"></span><span><b>${c.Overdue || 0}</b> Overdue (${overdueRate}%)</span></div>
-      </div>
-    </div>
-
-    <div class="dash-two">
-      <section class="perf-card">
-        <h3 style="margin-bottom:12px">Deadline Urgency Radar</h3>
-        <div class="radar-grid">
-          <div class="radar-box alert"><b class="num">${c.Overdue}</b><span>🚨 Overdue Tasks</span></div>
-          <div class="radar-box"><b class="num">${(d.due && d.due['Due today']) || 0}</b><span>⏰ Due Today</span></div>
-          <div class="radar-box"><b class="num">${(d.due && d.due['Due within 7 days']) || 0}</b><span>📅 Due within 7 Days</span></div>
-          <div class="radar-box"><b class="num">${(d.due && d.due['Due later']) || 0}</b><span>🗓️ Due Later</span></div>
-          <div class="radar-box"><b class="num">${(d.due && d.due['No due date']) || 0}</b><span>📁 No Due Date</span></div>
-        </div>
-      </section>
-
-      <section class="perf-card">
-        <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:10px">
-          <h3 style="margin:0">Activity & Task Velocity</h3>
-          <button type="button" class="btn sm ghost" data-act="dashtab" data-t="drilldown">Explore tasks →</button>
-        </div>
-        ${d.trends && d.trends.length ? h`<div class="trends-strip">${d.trends.map(t => h`<div class="trend-item"><div class="month-label">${t.month}</div><div class="created-val num">${t.created} <small class="muted" style="font-weight:400;font-size:.7rem">created</small></div><div class="done-val num">${t.completed} <small class="muted" style="font-weight:400;font-size:.7rem">done</small></div></div>`)}</div>` : h`<div class="empty">No historical trend data for this selection.</div>`}
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <span class="muted" style="font-size:.85rem">Total Open Workload: <b>${openCount} tasks</b></span>
-          <button type="button" class="btn sm primary" data-act="dashtab" data-t="workload">Review Team Workload →</button>
-        </div>
-      </section>
-    </div>
-  </div>`);
+function svgDonutChart(segments, centerValue, centerLabel) {
+  const r = 54, c = 2 * Math.PI * r;
+  const total = segments.reduce((a, s) => a + Math.max(0, s.value || 0), 0);
+  let acc = 0;
+  const arcs = total ? segments.filter(s => s.value > 0).map(s => {
+    const len = (s.value / total) * c;
+    const dash = `${len.toFixed(2)} ${(c - len).toFixed(2)}`;
+    const offset = (-acc).toFixed(2);
+    acc += len;
+    return `<circle cx="72" cy="72" r="${r}" fill="none" stroke="${s.color}" stroke-width="18" stroke-dasharray="${dash}" stroke-dashoffset="${offset}" stroke-linecap="butt" transform="rotate(-90 72 72)"/>`;
+  }).join('') : '';
+  return raw(`<svg class="nx-donut-svg" viewBox="0 0 144 144" role="img" aria-label="${centerLabel}: ${centerValue}">
+    <circle cx="72" cy="72" r="${r}" fill="none" stroke="var(--track)" stroke-width="18"/>
+    ${arcs}
+    <text x="72" y="70" text-anchor="middle" fill="var(--ink)" font-size="23" font-weight="700" class="num">${centerValue}</text>
+    <text x="72" y="88" text-anchor="middle" fill="var(--muted)" font-size="11" font-weight="600">${centerLabel}</text>
+  </svg>`);
 }
 
-function paintDashboardWorkload(box, d) {
-  const employees = d.byEmployee || [], q = (S.dashSearch || '').trim().toLowerCase();
-  const filtered = employees.filter(e => !q || (e.name + ' ' + e.code + ' ' + (e.role || '') + ' ' + (e.region || '')).toLowerCase().includes(q));
-  const totalOpen = employees.reduce((a, x) => a + (x.open || 0), 0);
-  const overdueStaff = employees.filter(x => (x.overdue || 0) > 0).length;
-
-  mount(box, h`<div style="display:grid;gap:16px;width:100%;max-width:100%;min-width:0">
-    <div class="perf-card">
-      <div class="actions" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-        <div>
-          <h3 style="margin:0">Team Capacity & Workload Allocation</h3>
-          <small class="muted">${employees.length} team member(s) · ${totalOpen} open tasks · ${overdueStaff} staff with overdue tasks</small>
-        </div>
-        <input class="cell-in" style="max-width:280px" type="search" placeholder="Search staff name or code…" value="${S.dashSearch || ''}" data-in="dashsearch" maxlength="100">
-      </div>
-
-      ${filtered.length ? h`<div class="workload-grid">${filtered.map(x => {
-        const pctDone = x.total ? Math.round(x.completed * 100 / x.total) : 0;
-        return h`<div class="employee-card">
-          <div class="emp-card-header">
-            <span class="emp-card-avatar">${initials(x.name)}</span>
-            <div class="emp-card-info">
-              <div class="emp-card-name" title="${x.name}">${x.name}</div>
-              <div class="emp-card-role">${x.code}${x.role ? ' · ' + x.role : ''}${x.region ? ' · ' + x.region : ''}</div>
-            </div>
-            ${x.overdue > 0 ? h`<span class="badge b-FAIL">${x.overdue} late</span>` : x.completed === x.total && x.total > 0 ? h`<span class="badge b-PASS">100% done</span>` : ''}
-          </div>
-          <div class="emp-card-stats">
-            <div><b class="num">${x.total}</b><span class="stat-lbl">Total</span></div>
-            <div><b class="num" style="color:var(--brand)">${x.open}</b><span class="stat-lbl">Open</span></div>
-            <div><b class="num" style="${x.overdue ? 'color:var(--bad)' : ''}">${x.overdue}</b><span class="stat-lbl">Late</span></div>
-            <div><b class="num" style="color:var(--ok)">${x.completed}</b><span class="stat-lbl">Done</span></div>
-          </div>
-          <div>
-            <div class="emp-progress-bar" title="${pctDone}% done"><i style="width:${pctDone}%"></i></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-              <small class="muted">${pctDone}% completed</small>
-              <button type="button" class="btn sm ghost" style="padding:2px 8px;font-size:.8rem" data-act="dashinspectemp" data-code="${x.code}">Inspect tasks →</button>
-            </div>
-          </div>
-        </div>`;
-      })}</div>` : h`<div class="empty">No employees match your search query.</div>`}
-    </div>
-
-    ${S.boot.user.isAdmin && (d.byNazim || []).length ? h`
-      <div class="perf-card">
-        <h3 style="margin-bottom:6px">Manager / Nazim Oversight</h3>
-        <p class="muted" style="margin-bottom:12px">Workload roll-up across managers and reporting lines.</p>
-        <div class="dash-bars">${d.byNazim.map(n => {
-          const maxOpen = Math.max(1, ...(d.byNazim || []).map(x => x.open));
-          const pctBar = Math.max(2, Math.round(n.open * 100 / maxOpen));
-          return h`<div class="dash-barrow">
-            <div class="dash-label" title="${n.name}"><b>${n.name}</b> <small class="muted">${n.code}</small></div>
-            <div class="dash-track"><i style="width:${pctBar}%"></i></div>
-            <b class="num">${n.open}</b>
-            <div class="dash-meta">
-              <span>${n.pending || 0} pending</span>
-              <span class="meta-sep">·</span>
-              <span class="${n.overdue ? 'meta-late' : ''}">${n.overdue || 0} late</span>
-              <span class="meta-sep">·</span>
-              <span>${n.completed || 0} done</span>
-            </div>
-          </div>`;
-        })}</div>
-      </div>` : ''}
-  </div>`);
+function svgGauge(percent) {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  const r = 24, c = 2 * Math.PI * r, len = (p / 100) * c;
+  return raw(`<svg width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+    <circle cx="30" cy="30" r="${r}" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="6"/>
+    <circle cx="30" cy="30" r="${r}" fill="none" stroke="#34d399" stroke-width="6" stroke-linecap="round" stroke-dasharray="${len.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 30 30)"/>
+    <text x="30" y="34" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">${Math.round(p)}%</text>
+  </svg>`);
 }
 
-function dashboardBarSection(title, items, mode) {
-  const rows = items || [], max = Math.max(1, ...rows.map(x => mode === 'tasks' ? x.total : x.open));
-  return h`<div class="perf-card">
-    <h3 style="margin-bottom:14px;font-size:1.05rem;font-weight:700">${title}</h3>
-    ${rows.length ? h`<div class="dash-bars">${rows.map(x => {
-      const val = mode === 'tasks' ? x.total : x.open;
-      const label = x.name ? x.name + ' · ' + x.code : x.label;
-      const pctDone = x.total ? Math.round(x.completed * 100 / x.total) : 0;
-      const pctBar = Math.max(2, Math.round(val * 100 / max));
-      return h`<div class="dash-barrow">
-        <div class="dash-label" title="${label}">${label}</div>
-        <div class="dash-track"><i style="width:${pctBar}%"></i></div>
-        <b class="num">${val}</b>
-        <div class="dash-meta">
-          <span>${x.open} open</span>
-          <span class="meta-sep">·</span>
-          <span class="${x.overdue ? 'meta-late' : ''}">${x.overdue} late</span>
-          <span class="meta-sep">·</span>
-          <span>${pctDone}% done</span>
-        </div>
-      </div>`;
-    })}</div>` : h`<div class="empty">No task distribution data in this selection.</div>`}
+function svgColumnChart(items, emptyText) {
+  const rows = (items || []).slice(-6);
+  if (!rows.length) return h`<div class="empty" style="padding:28px 16px">${emptyText || 'No activity data yet.'}</div>`;
+  const w = 440, hgt = 190, padL = 30, padR = 12, padT = 20, padB = 30;
+  const maxVal = Math.max(2, ...rows.map(r => Math.max(r.created || 0, r.completed || 0)));
+  const chartW = w - padL - padR, chartH = hgt - padT - padB;
+  const slotW = chartW / rows.length;
+  const barW = Math.min(18, Math.max(9, Math.floor((slotW - 14) / 2)));
+
+  let grid = '';
+  for (let i = 0; i <= 3; i++) {
+    const val = Math.round((maxVal * i) / 3);
+    const y = padT + chartH - (chartH * i) / 3;
+    grid += `<line x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" stroke="var(--line)" stroke-dasharray="${i === 0 ? '' : '3 3'}"/>`;
+    grid += `<text x="${padL - 6}" y="${y + 4}" text-anchor="end" fill="var(--muted)" font-size="10">${val}</text>`;
+  }
+
+  const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const bars = rows.map((r, i) => {
+    const cx = padL + slotW * i + slotW / 2;
+    const hC = Math.round(((r.created || 0) / maxVal) * chartH);
+    const hD = Math.round(((r.completed || 0) / maxVal) * chartH);
+    const yC = padT + chartH - hC, yD = padT + chartH - hD;
+    const rawLbl = String(r.label || r.month || '');
+    const mm = rawLbl.match(/^(\d{4})-(\d{2})$/);
+    const lbl = mm ? (mNames[Number(mm[2]) - 1] || mm[2]) + " '" + mm[1].slice(2) : rawLbl;
+    return `
+      <rect x="${cx - barW - 2}" y="${yC}" width="${barW}" height="${Math.max(2, hC)}" rx="4" fill="var(--nx-indigo)"><title>${lbl}: ${r.created} added</title></rect>
+      ${r.created ? `<text x="${cx - barW / 2 - 2}" y="${Math.max(11, yC - 4)}" text-anchor="middle" fill="var(--ink)" font-size="10" font-weight="700">${r.created}</text>` : ''}
+      <rect x="${cx + 2}" y="${yD}" width="${barW}" height="${Math.max(2, hD)}" rx="4" fill="var(--nx-emerald)"><title>${lbl}: ${r.completed} finished</title></rect>
+      ${r.completed ? `<text x="${cx + barW / 2 + 2}" y="${Math.max(11, yD - 4)}" text-anchor="middle" fill="var(--nx-emerald)" font-size="10" font-weight="700">${r.completed}</text>` : ''}
+      <text x="${cx}" y="${hgt - 8}" text-anchor="middle" fill="var(--muted)" font-size="10.5" font-weight="600">${lbl}</text>`;
+  }).join('');
+
+  return h`<div style="display:grid;gap:10px">
+    <div class="nx-chart-box"><svg viewBox="0 0 ${w} ${hgt}" style="width:100%;min-width:290px;max-height:210px;display:block">${raw(grid + bars)}</svg></div>
+    <div class="nx-chart-legend">
+      <span><i style="background:var(--nx-indigo)"></i> New Tasks Added</span>
+      <span><i style="background:var(--nx-emerald)"></i> Tasks Finished</span>
+    </div>
   </div>`;
 }
 
-function paintDashboardOrg(box, d) {
-  mount(box, h`<div style="display:grid;gap:16px;width:100%;max-width:100%;min-width:0">
-    <div class="dash-two">
-      ${dashboardBarSection('Tasks by Location / Division', d.byLocation, 'tasks')}
-      ${dashboardBarSection('Tasks by Region', d.byRegion, 'tasks')}
+function paintDashboardOverview(box, d) {
+  const c = d.counts || {}, sm = d.summary || {}, due = d.due || {};
+  const active = S.dashFilters.status || '';
+  const total = c.Total || 0;
+  const pct = v => total ? Math.round(v * 100 / total) : 0;
+
+  const done = c.Completed || 0, prog = c['In Progress'] || 0, pend = c.Pending || 0, late = c.Overdue || 0;
+  const awaiting = sm.awaitingConfirm || 0, dueWeek = sm.dueThisWeek || 0;
+  const headline = !total
+    ? 'No tasks found in this selection.'
+    : late > 0
+      ? `${done} of ${total} tasks are finished (${d.completionRate}%). ${late} task${late === 1 ? ' is' : 's are'} past due.`
+      : `All ${total} tasks are on track — ${done} finished and ${prog + pend} active.`;
+  const subline = awaiting > 0
+    ? `${awaiting} task${awaiting === 1 ? ' is' : 's are'} still waiting for staff to confirm receipt · ${dueWeek} task${dueWeek === 1 ? '' : 's'} due within 7 days.`
+    : `${dueWeek} task${dueWeek === 1 ? ' is' : 's are'} due within 7 days · ${prog} currently in progress.`;
+
+  const kpi = (status, label, val, sub, tone) => h`<button type="button" class="nx-kpi ${tone}" data-act="dashkpi" data-status="${status}" aria-pressed="${active === status}">
+    <div class="nx-kpi-head"><span class="nx-kpi-lbl">${label}</span><span class="nx-kpi-dot"></span></div>
+    <div class="nx-kpi-val num">${val}</div>
+    <div class="nx-kpi-sub">${sub}</div>
+  </button>`;
+
+  const openCount = prog + pend;
+  const segs = [
+    { label: 'Finished', value: done, color: 'var(--nx-emerald)', status: 'Completed' },
+    { label: 'Working Now', value: prog, color: 'var(--nx-sky)', status: 'In Progress' },
+    { label: 'Waiting Start', value: pend, color: 'var(--nx-amber)', status: 'Pending' }
+  ];
+
+  const dueRows = [
+    { label: 'Already Late', val: late, color: 'var(--nx-rose)', status: 'Overdue' },
+    { label: 'Due Today', val: due['Due today'] || 0, color: 'var(--nx-amber)', status: '' },
+    { label: 'Due in 7 Days', val: due['Due within 7 days'] || 0, color: 'var(--nx-indigo)', status: '' },
+    { label: 'Due Later', val: due['Due later'] || 0, color: 'var(--nx-sky)', status: '' },
+    { label: 'No Deadline', val: due['No due date'] || 0, color: 'var(--muted)', status: '' }
+  ];
+  const maxDue = Math.max(1, ...dueRows.map(r => r.val));
+
+  const alerts = (d.topOverdue || []).slice(0, 4);
+  const unconfirmed = (d.awaitingConfirmList || []).slice(0, 4);
+
+  mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
+    <section class="nx-hero">
+      <div class="nx-hero-text">
+        <div class="nx-hero-kicker">Summary in Simple Words</div>
+        <h3>${headline}</h3>
+        <p>${subline}</p>
+      </div>
+      <div class="nx-hero-gauge">
+        ${svgGauge(d.completionRate)}
+        <div><strong>${done} / ${total}</strong><span>Tasks Finished</span></div>
+      </div>
+    </section>
+
+    <div class="nx-kpis">
+      ${kpi('', 'All Tasks', total, (sm.managerTasks || 0) + ' assigned · ' + (sm.selfTasks || 0) + ' self', 'k-indigo')}
+      ${kpi('Pending', 'Waiting Start', pend, awaiting ? awaiting + ' awaiting confirmation' : pct(pend) + '% waiting', 'k-amber')}
+      ${kpi('In Progress', 'Working Now', prog, pct(prog) + '% active work', 'k-sky')}
+      ${kpi('Completed', 'Finished', done, d.completionRate + '% done rate', 'k-emerald')}
+      ${kpi('Overdue', 'Late Tasks', late, late ? 'Needs immediate follow-up' : 'Nothing late', 'k-rose')}
     </div>
-    ${S.boot.user.isAdmin ? dashboardBarSection('Tasks by Job Role / Designation', d.byRole, 'tasks') : ''}
+
+    <div class="nx-grid-2">
+      <section class="nx-card">
+        <div class="nx-card-head">
+          <div><h3>How Tasks Are Going</h3><small>Click any group below to see its tasks</small></div>
+          <span class="nx-pill indigo">${openCount} active</span>
+        </div>
+        <div class="nx-donut-wrap">
+          ${svgDonutChart(segs, total, 'Total Tasks')}
+          <div class="nx-legend">
+            ${segs.map(s => h`<button type="button" class="nx-leg-row" data-act="dashkpi" data-status="${s.status}">
+              <span class="nx-leg-left"><span class="nx-leg-sw" style="background:${s.color}"></span><span class="nx-leg-name">${s.label}</span></span>
+              <span class="nx-leg-right"><b class="num">${s.value}</b><span>${pct(s.value)}%</span></span>
+            </button>`)}
+            <button type="button" class="nx-leg-row" data-act="dashkpi" data-status="Overdue">
+              <span class="nx-leg-left"><span class="nx-leg-sw" style="background:var(--nx-rose)"></span><span class="nx-leg-name">Late (Past Due)</span></span>
+              <span class="nx-leg-right"><b class="num" style="color:var(--nx-rose)">${late}</b><span>${pct(late)}%</span></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="nx-card">
+        <div class="nx-card-head">
+          <div><h3>When Work Is Due</h3><small>Open tasks grouped by deadline</small></div>
+          <button type="button" class="btn sm ghost" data-act="dashtab" data-t="deadlines">See deadlines →</button>
+        </div>
+        <div class="nx-hbar-list">
+          ${dueRows.map(r => h`<button type="button" class="nx-hbar-btn" data-act="dashkpi" data-status="${r.status}">
+            <div class="nx-hbar-top"><span>${r.label}</span><b class="num" style="${r.val && r.label === 'Already Late' ? 'color:var(--nx-rose)' : ''}">${r.val}</b></div>
+            <div class="nx-hbar-track"><i style="width:${r.val ? Math.max(4, Math.round(r.val * 100 / maxDue)) : 0}%;background:${r.color}"></i></div>
+          </button>`)}
+        </div>
+      </section>
+    </div>
+
+    <div class="nx-grid-2">
+      <section class="nx-card">
+        <div class="nx-card-head">
+          <div><h3>Work Speed (Recent Weeks)</h3><small>New tasks added compared to tasks finished</small></div>
+        </div>
+        ${svgColumnChart(d.weekly || d.trends, 'Not enough task history yet.')}
+      </section>
+
+      <section class="nx-card">
+        <div class="nx-card-head">
+          <div><h3>Needs Your Attention</h3><small>${alerts.length ? 'Most overdue tasks' : unconfirmed.length ? 'Tasks not yet accepted by staff' : 'No urgent blocks right now'}</small></div>
+          <button type="button" class="btn sm ghost" data-act="dashtab" data-t="tasks">View all →</button>
+        </div>
+        ${alerts.length ? h`<div class="nx-mini-list">${alerts.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
+          <div class="nx-mini-main">
+            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-sub">Assigned to <b>${t.AssignedToName}</b> · Due ${t.Due ? fmtDate(t.Due) : '—'}</div>
+          </div>
+          <span class="nx-pill rose">${t.DaysLate}d late</span>
+        </button>`)}</div>`
+        : unconfirmed.length ? h`<div class="nx-mini-list">${unconfirmed.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
+          <div class="nx-mini-main">
+            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-sub">Waiting on <b>${t.AssignedToName}</b> to confirm</div>
+          </div>
+          <span class="nx-pill amber">Waiting confirm</span>
+        </button>`)}</div>`
+        : h`<div class="empty" style="padding:28px 16px"><b>Everything looks healthy!</b><span>No overdue or stuck tasks in this view.</span></div>`}
+      </section>
+    </div>
   </div>`);
 }
 
-function paintDashboardExplorer(box, d) {
-  const active = S.dashFilters.status || '', c = d.counts, rows = (d.drilldown && d.drilldown.tasks) || [];
-  const total = (d.drilldown && d.drilldown.total) || 0;
+function paintDashboardTeam(box, d) {
+  const employees = d.byEmployee || [], q = (S.dashSearch || '').trim().toLowerCase();
+  const filtered = employees.filter(e => !q || (e.name + ' ' + e.code + ' ' + (e.role || '') + ' ' + (e.region || '')).toLowerCase().includes(q));
+  const totalOpen = employees.reduce((a, x) => a + (x.open || 0), 0);
+  const lateStaff = employees.filter(x => (x.overdue || 0) > 0).length;
+  const topFinishers = [...employees].filter(e => e.total > 0).sort((a, b) => (b.completed / b.total) - (a.completed / a.total) || b.completed - a.completed).slice(0, 4);
+  const busiest = [...employees].filter(e => e.overdue > 0 || e.open > 0).sort((a, b) => b.overdue - a.overdue || b.open - a.open).slice(0, 4);
 
-  const pill = (status, label, count) => h`
-    <button type="button" class="status-pill ${status === 'Overdue' ? 'over' : ''}" data-act="dashkpi" data-status="${status}" aria-pressed="${active === status}">
-      ${label} <span class="num">(${count == null ? 0 : count})</span>
-    </button>`;
+  mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
+    <div class="nx-grid-2">
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>Top Finishers</h3><small>Highest completion rate</small></div><span class="nx-pill emerald">On Track</span></div>
+        ${topFinishers.length ? h`<div class="nx-mini-list">${topFinishers.map(x => {
+          const pct = x.total ? Math.round(x.completed * 100 / x.total) : 0;
+          return h`<button type="button" class="nx-mini-item" data-act="dashinspectemp" data-code="${x.code}">
+            <div class="nx-mini-main"><div class="nx-mini-title">${x.name}</div><div class="nx-mini-sub">${x.completed} of ${x.total} finished${x.role ? ' · ' + x.role : ''}</div></div>
+            <span class="nx-pill emerald num">${pct}%</span>
+          </button>`;
+        })}</div>` : h`<div class="empty" style="padding:20px">No completed data yet.</div>`}
+      </section>
 
-  mount(box, h`<div class="task-explorer-card">
-    <div class="explorer-toolbar">
-      <div>
-        <h3 style="margin:0">${active ? active === 'Overdue' ? 'Overdue Tasks' : active + ' Tasks' : 'All Tasks'}</h3>
-        <small class="muted">${total} task(s) matching selected parameters</small>
-      </div>
-      <div class="status-pill-group">
-        ${pill('', 'All', c.Total)}
-        ${pill('Overdue', '🚨 Overdue', c.Overdue)}
-        ${pill('Pending', '⏳ Pending', c.Pending)}
-        ${pill('In Progress', '🔄 In Progress', c['In Progress'])}
-        ${pill('Completed', '✅ Completed', c.Completed)}
-      </div>
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>Needs Follow-up</h3><small>Staff with late or heavy workload</small></div><span class="nx-pill rose">${lateStaff} with late tasks</span></div>
+        ${busiest.length ? h`<div class="nx-mini-list">${busiest.map(x => h`<button type="button" class="nx-mini-item" data-act="dashinspectemp" data-code="${x.code}">
+          <div class="nx-mini-main"><div class="nx-mini-title">${x.name}</div><div class="nx-mini-sub">${x.open} open task(s)${x.role ? ' · ' + x.role : ''}</div></div>
+          <span class="nx-pill ${x.overdue ? 'rose' : 'sky'} num">${x.overdue ? x.overdue + ' late' : x.open + ' open'}</span>
+        </button>`)}</div>` : h`<div class="empty" style="padding:20px">Nobody has open or overdue work.</div>`}
+      </section>
     </div>
 
-    ${rows.length ? h`<div class="dash-list" style="display:grid;gap:8px">${rows.map(t => h`
-      <div class="explorer-item" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="Open ${t.Title}">
-        <div class="explorer-item-main">
-          <div class="explorer-item-title">${t.Title}</div>
-          <div class="explorer-item-sub">
-            <span class="task-origin">${taskOrigin(t)}</span>
-            <span>👤 ${t.AssignedToName} <small class="muted">(${t.AssignedTo})</small></span>
-            <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
-            <span style="${t.Overdue ? 'color:var(--bad);font-weight:600' : ''}">${t.Due ? (t.Overdue ? '🚨 Overdue · ' : '') + 'Due ' + fmtDate(t.Due) : 'No due date'}</span>
+    <section class="nx-card">
+      <div class="nx-card-head">
+        <div><h3>All Team Members</h3><small>${employees.length} people · ${totalOpen} open tasks total</small></div>
+        <input class="cell-in" style="max-width:260px" type="search" placeholder="Find person by name or code…" value="${S.dashSearch || ''}" data-in="dashsearch" maxlength="100">
+      </div>
+      ${filtered.length ? h`<div class="nx-grid-3">${filtered.map(x => {
+        const t = x.total || 1;
+        const pDone = Math.round((x.completed || 0) * 100 / t);
+        const pWork = Math.round((x.inProgress || 0) * 100 / t);
+        const pWait = Math.max(0, 100 - pDone - pWork);
+        return h`<div class="nx-staff-card">
+          <div class="nx-staff-top">
+            <span class="nx-avatar">${initials(x.name)}</span>
+            <div class="nx-staff-info">
+              <div class="nx-staff-name" title="${x.name}">${x.name}</div>
+              <div class="nx-staff-role">${x.code}${x.role ? ' · ' + x.role : ''}${x.region ? ' · ' + x.region : ''}</div>
+            </div>
+            ${x.overdue > 0 ? h`<span class="nx-pill rose">${x.overdue} late</span>` : x.completed === x.total && x.total > 0 ? h`<span class="nx-pill emerald">All done</span>` : ''}
+          </div>
+          <div class="nx-staff-nums">
+            <div><b class="num">${x.total}</b><span>Total</span></div>
+            <div><b class="num" style="color:var(--nx-sky)">${x.open}</b><span>Active</span></div>
+            <div><b class="num" style="${x.overdue ? 'color:var(--nx-rose)' : ''}">${x.overdue}</b><span>Late</span></div>
+            <div><b class="num" style="color:var(--nx-emerald)">${x.completed}</b><span>Done</span></div>
+          </div>
+          <div>
+            <div class="nx-stack-bar" title="Finished ${pDone}% · Working ${pWork}% · Waiting ${pWait}%">
+              <i style="width:${pDone}%;background:var(--nx-emerald)"></i>
+              <i style="width:${pWork}%;background:var(--nx-sky)"></i>
+              <i style="width:${pWait}%;background:var(--nx-amber)"></i>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+              <small class="muted">${pDone}% finished</small>
+              <button type="button" class="btn sm ghost" style="padding:2px 8px;font-size:.82rem;min-height:28px" data-act="dashinspectemp" data-code="${x.code}">See tasks →</button>
+            </div>
+          </div>
+        </div>`;
+      })}</div>` : h`<div class="empty">No team members match "${S.dashSearch}".</div>`}
+    </section>
+
+    ${S.boot.user.isAdmin && (d.byNazim || []).length ? h`
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>By Nazim / Supervisor</h3><small>Total team workload under each Nazim</small></div></div>
+        <div class="nx-hbar-list">${d.byNazim.map(n => {
+          const tot = n.total || 1, pD = Math.round(n.completed * 100 / tot), pW = Math.round(n.inProgress * 100 / tot), pP = Math.max(0, 100 - pD - pW);
+          return h`<button type="button" class="nx-hbar-btn" data-act="dashfilterarea" data-k="nazim" data-v="${n.code}">
+            <div class="nx-hbar-top"><span>${n.name} <small class="muted">${n.code}</small></span><span class="num">${n.open} active / ${n.total} total</span></div>
+            <div class="nx-hbar-track"><i style="width:${pD}%;background:var(--nx-emerald)"></i><i style="width:${pW}%;background:var(--nx-sky)"></i><i style="width:${pP}%;background:var(--nx-amber)"></i></div>
+            <div class="nx-hbar-meta"><span>${n.completed} done</span><span>·</span><span>${n.inProgress} working</span><span>·</span><span style="${n.overdue ? 'color:var(--nx-rose);font-weight:700' : ''}">${n.overdue} late</span></div>
+          </button>`;
+        })}</div>
+      </section>` : ''}
+  </div>`);
+}
+
+function paintDashboardDeadlines(box, d) {
+  const sm = d.summary || {}, c = d.counts || {};
+  const onTime = sm.completedOnTime || 0, lateDone = sm.completedLate || 0;
+  const segs = [
+    { label: 'Finished On Time', value: onTime, color: 'var(--nx-emerald)', status: 'Completed' },
+    { label: 'Finished After Due Date', value: lateDone, color: 'var(--nx-amber)', status: 'Completed' },
+    { label: 'Still Open & Late', value: c.Overdue || 0, color: 'var(--nx-rose)', status: 'Overdue' }
+  ];
+  const overdueList = d.topOverdue || [], todayList = d.dueTodayList || [];
+
+  mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
+    <div class="nx-grid-2">
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>On-Time Record</h3><small>Are tasks getting finished before their deadline?</small></div><span class="nx-pill emerald">${sm.onTimeRate == null ? 100 : sm.onTimeRate}% on time</span></div>
+        <div class="nx-donut-wrap">
+          ${svgDonutChart(segs, (sm.onTimeRate == null ? 100 : sm.onTimeRate) + '%', 'On-Time Score')}
+          <div class="nx-legend">
+            ${segs.map(s => h`<button type="button" class="nx-leg-row" data-act="dashkpi" data-status="${s.status}">
+              <span class="nx-leg-left"><span class="nx-leg-sw" style="background:${s.color}"></span><span class="nx-leg-name">${s.label}</span></span>
+              <span class="nx-leg-right"><b class="num">${s.value}</b></span>
+            </button>`)}
           </div>
         </div>
-        <div class="explorer-item-side">
-          <span class="st ${stClass(t.Status)}">${t.Status}</span>
-          <span style="font-size:1.2rem;color:var(--muted)">›</span>
+      </section>
+
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>Monthly Progress</h3><small>New tasks added vs finished each month</small></div></div>
+        ${svgColumnChart(d.trends, 'Monthly chart will appear once tasks span multiple months.')}
+      </section>
+    </div>
+
+    <div class="nx-grid-2">
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>Late Tasks (Most Urgent)</h3><small>Tasks already past their due date</small></div><button type="button" class="btn sm ghost" data-act="dashkpi" data-status="Overdue">See all ${c.Overdue || 0} →</button></div>
+        ${overdueList.length ? h`<div class="nx-mini-list">${overdueList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
+          <div class="nx-mini-main">
+            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-sub">${t.AssignedToName} · Due ${t.Due ? fmtDate(t.Due) : '—'} · ${t.Status}</div>
+          </div>
+          <span class="nx-pill rose">${t.DaysLate}d late</span>
+        </button>`)}</div>` : h`<div class="empty" style="padding:24px"><b>Zero late tasks!</b><span>Everything is within its deadline.</span></div>`}
+      </section>
+
+      <section class="nx-card">
+        <div class="nx-card-head"><div><h3>Due Today</h3><small>Tasks scheduled to finish today</small></div><span class="nx-pill amber">${(d.due && d.due['Due today']) || 0} today</span></div>
+        ${todayList.length ? h`<div class="nx-mini-list">${todayList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
+          <div class="nx-mini-main">
+            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-sub">${t.AssignedToName} · ${t.NeedsAck ? 'Waiting confirmation' : t.Status}</div>
+          </div>
+          <span class="nx-pill sky">Due Today</span>
+        </button>`)}</div>` : h`<div class="empty" style="padding:24px"><b>Nothing due today</b><span>Check upcoming tasks in Overview.</span></div>`}
+      </section>
+    </div>
+  </div>`);
+}
+
+function areaBarsCard(title, sub, items, filterKey, canClickFilter) {
+  const rows = items || [];
+  return h`<section class="nx-card">
+    <div class="nx-card-head">
+      <div><h3>${title}</h3><small>${sub}</small></div>
+      <div class="nx-chart-legend" style="font-size:.74rem">
+        <span><i style="background:var(--nx-emerald)"></i> Done</span>
+        <span><i style="background:var(--nx-sky)"></i> Working</span>
+        <span><i style="background:var(--nx-amber)"></i> Waiting</span>
+      </div>
+    </div>
+    ${rows.length ? h`<div class="nx-hbar-list">${rows.map(x => {
+      const tot = x.total || 1, pD = Math.round(x.completed * 100 / tot), pW = Math.round(x.inProgress * 100 / tot), pP = Math.max(0, 100 - pD - pW);
+      return h`<button type="button" class="nx-hbar-btn" ${canClickFilter ? h`data-act="dashfilterarea" data-k="${filterKey}" data-v="${x.label}"` : 'disabled'}>
+        <div class="nx-hbar-top"><span>${x.label}</span><span class="num">${x.total} total (${pD}% done)</span></div>
+        <div class="nx-hbar-track"><i style="width:${pD}%;background:var(--nx-emerald)"></i><i style="width:${pW}%;background:var(--nx-sky)"></i><i style="width:${pP}%;background:var(--nx-amber)"></i></div>
+        <div class="nx-hbar-meta"><span>${x.completed} done</span><span>·</span><span>${x.inProgress} working</span><span>·</span><span>${x.pending} waiting</span>${x.overdue ? h`<span>·</span><span style="color:var(--nx-rose);font-weight:700">${x.overdue} late</span>` : ''}</div>
+      </button>`;
+    })}</div>` : h`<div class="empty" style="padding:24px">No data in this selection.</div>`}
+  </section>`;
+}
+
+function paintDashboardAreas(box, d) {
+  const isAdmin = !!(S.boot && S.boot.user && S.boot.user.isAdmin);
+  mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
+    <div class="nx-grid-2">
+      ${areaBarsCard('By Office / Division', isAdmin ? 'Click an office to filter tasks' : 'Task progress across offices', d.byLocation, 'location', isAdmin)}
+      ${areaBarsCard('By Region', isAdmin ? 'Click a region to filter tasks' : 'Task progress across regions', d.byRegion, 'region', isAdmin)}
+    </div>
+    ${areaBarsCard('By Job Role', isAdmin ? 'Click a role to filter tasks' : 'Breakdown by designation', d.byRole, 'role', isAdmin)}
+  </div>`);
+}
+
+function paintDashboardTasks(box, d) {
+  const active = S.dashFilters.status || '', c = d.counts || {}, rows = (d.drilldown && d.drilldown.tasks) || [];
+  const total = (d.drilldown && d.drilldown.total) || 0;
+  const q = (S.dashTaskQuery || '').trim().toLowerCase();
+  const visibleRows = q ? rows.filter(t => (t.Title + ' ' + t.AssignedToName + ' ' + t.AssignedTo + ' ' + t.Region + ' ' + t.Division).toLowerCase().includes(q)) : rows;
+
+  const pill = (status, label, count, extra) => h`<button type="button" class="nx-fpill ${extra || ''}" data-act="dashkpi" data-status="${status}" aria-pressed="${active === status}">${label} <span class="num">(${count == null ? 0 : count})</span></button>`;
+
+  mount(box, h`<section class="nx-card">
+    <div class="nx-card-head">
+      <div>
+        <h3>${active ? (active === 'Overdue' ? 'Late Tasks' : active === 'Pending' ? 'Waiting Start' : active === 'In Progress' ? 'Working Now' : 'Finished Tasks') : 'All Matching Tasks'}</h3>
+        <small>${total} task${total === 1 ? '' : 's'} total${q ? ' · ' + visibleRows.length + ' shown for "' + S.dashTaskQuery + '"' : ''}</small>
+      </div>
+      <input class="cell-in" style="max-width:250px" type="search" placeholder="Search loaded tasks…" value="${S.dashTaskQuery || ''}" data-in="dashtasksearch" maxlength="100">
+    </div>
+
+    <div class="nx-filter-pills">
+      ${pill('', 'All', c.Total)}
+      ${pill('Overdue', 'Late', c.Overdue, 'rose')}
+      ${pill('Pending', 'Waiting', c.Pending)}
+      ${pill('In Progress', 'Working Now', c['In Progress'])}
+      ${pill('Completed', 'Finished', c.Completed)}
+    </div>
+
+    ${visibleRows.length ? h`<div style="display:grid;gap:8px">${visibleRows.map(t => h`<button type="button" class="nx-task-row" data-act="open" data-id="${t.TaskID}">
+      <div class="nx-mini-main">
+        <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+        <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
+          <span class="task-origin">${taskOrigin(t)}</span>
+          <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
+          <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
+          <span style="${t.Overdue ? 'color:var(--nx-rose);font-weight:700' : ''}">${t.Due ? (t.Overdue ? 'Late · Due ' : 'Due ') + fmtDate(t.Due) : 'No due date'}</span>
         </div>
       </div>
-    `)}</div>` : h`<div class="empty"><b>No tasks match this filter.</b><p class="muted">Try selecting a different status pill above or reset filters.</p>${active ? h`<button type="button" class="btn sm" data-act="dashkpi" data-status="">View all tasks</button>` : ''}</div>`}
+      <div style="display:flex;align-items:center;gap:8px;flex:none">
+        ${t.NeedsAck ? h`<span class="nx-pill amber">Waiting confirm</span>` : ''}
+        <span class="st ${stClass(t.Status)}">${t.Status}</span>
+      </div>
+    </button>`)}</div>` : h`<div class="empty"><b>No tasks match here</b><span>Try switching the status filter above or clearing your search.</span>${active ? h`<p><button type="button" class="btn sm" data-act="dashkpi" data-status="">Show all tasks</button></p>` : ''}</div>`}
 
-    ${d.drilldown && d.drilldown.hasMore ? h`
-      <div style="text-align:center;margin-top:10px">
-        <button type="button" class="btn primary" data-act="dashmore" data-busy="Loading">Load more tasks (${total - rows.length} left)</button>
-      </div>` : ''}
-  </div>`);
+    ${d.drilldown && d.drilldown.hasMore ? h`<div style="text-align:center;margin-top:4px"><button type="button" class="btn primary" data-act="dashmore" data-busy="Loading">Show more tasks (${total - rows.length} left)</button></div>` : ''}
+  </section>`);
 }
 
 async function loadDashboard(silent) {
@@ -2590,7 +2614,7 @@ const ACT = {
   clearassignees: () => { S.draft.assignees.clear(); paintAssignees(); paintDraftPreview(); },
   dashtab: el => {
     S.dashTab = el.dataset.t;
-    $$('.dash-nav-tab').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+    $$('.nx-tab').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
     paintDashboard();
   },
   dashtogglefilters: () => {
@@ -2598,22 +2622,30 @@ const ACT = {
     const box = $('#dash-filter-container');
     if (box) box.hidden = !S.dashFilterOpen;
     const btn = $('[data-act="dashtogglefilters"]');
-    if (btn) btn.innerHTML = (S.dashFilterOpen ? 'Hide filters ▴' : 'Filter controls ▾') + (Object.keys(S.dashFilters).filter(k => S.dashFilters[k] && k !== 'offset').length ? ` <span class="badge b-PASS">${Object.keys(S.dashFilters).filter(k => S.dashFilters[k] && k !== 'offset').length}</span>` : '');
+    const cnt = Object.keys(S.dashFilters).filter(k => S.dashFilters[k] && k !== 'offset').length;
+    if (btn) btn.innerHTML = (S.dashFilterOpen ? 'Hide filters ▴' : 'Filters ▾') + (cnt ? ` <span class="nx-tab-cnt">${cnt}</span>` : '');
   },
   dashclearfilter: el => {
     delete S.dashFilters[el.dataset.k];
     delete S.dashFilters.offset;
     loadDashboard();
   },
+  dashfilterarea: el => {
+    const k = el.dataset.k, v = el.dataset.v;
+    if (k && v) S.dashFilters[k] = v;
+    delete S.dashFilters.offset;
+    S.dashTab = 'tasks';
+    loadDashboard();
+  },
   dashinspectemp: el => {
     S.dashFilters.employee = el.dataset.code;
     delete S.dashFilters.offset;
-    S.dashTab = 'drilldown';
+    S.dashTab = 'tasks';
     loadDashboard();
   },
   refreshdashboard: el => busy(el, async () => { await loadDashboard(true); }),
-  dashreset: () => { S.dashFilters = {}; S.dashboard = null; loadDashboard(); },
-  dashkpi: el => { const status = el.dataset.status || ''; if (status) S.dashFilters.status = status; else delete S.dashFilters.status; delete S.dashFilters.offset; S.dashTab = 'drilldown'; loadDashboard(); },
+  dashreset: () => { S.dashFilters = {}; S.dashTaskQuery = ''; S.dashboard = null; loadDashboard(); },
+  dashkpi: el => { const status = el.dataset.status || ''; if (status) S.dashFilters.status = status; else delete S.dashFilters.status; delete S.dashFilters.offset; S.dashTab = 'tasks'; loadDashboard(); },
   dashmore: () => { if (!S.dashboard || !S.dashboard.drilldown || !S.dashboard.drilldown.hasMore) return; S.dashFilters.offset = S.dashboard.drilldown.nextOffset; loadDashboard(true); },
   cancelreopen: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   pick: el => { const box = el.closest('.picker'); $('.pin', box).value = el.dataset.n + ' (' + el.dataset.c + ')'; $('.pval', box).value = el.dataset.c; $('.plist', box).hidden = true; },
@@ -2712,7 +2744,8 @@ document.addEventListener('input', e => {
   if (el.dataset.in === 'filter') { const f = S.filters[S.view], v = el.value.trim(); if (v) f[el.dataset.k] = v; else delete f[el.dataset.k]; applyFilter(S.view); }
   else if (el.dataset.in === 'pick') { const box = el.closest('.picker'); $('.pval', box).value = ''; pickerShow(box); }
   else if (el.dataset.in === 'peopleq') { S.admin.q = el.value; paintPeople(); }
-  else if (el.dataset.in === 'dashsearch') { S.dashSearch = el.value; const b = $('#dashboard-content'); if (b && S.dashboard && S.dashTab === 'workload') paintDashboardWorkload(b, S.dashboard); }
+  else if (el.dataset.in === 'dashsearch') { S.dashSearch = el.value; const b = $('#dashboard-content'); if (b && S.dashboard && S.dashTab === 'team') paintDashboardTeam(b, S.dashboard); }
+  else if (el.dataset.in === 'dashtasksearch') { S.dashTaskQuery = el.value; const b = $('#dashboard-content'); if (b && S.dashboard && S.dashTab === 'tasks') paintDashboardTasks(b, S.dashboard); }
   else if (el.id === 'n-people-search') paintAssignees();
   else if (el.id === 'n-tpl-search') paintTemplates();
   else if (el.id === 'n-taskTitle') applyDraftPreview();
