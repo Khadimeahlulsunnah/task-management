@@ -756,8 +756,9 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-<!-- Firebase Config & Backend Adapter -->
+<!-- Firebase Config, Encryption Vault & Backend Adapter -->
 <script src="firebase-config.js"></script>
+<script src="crypto-vault.js"></script>
 <script src="firebase-backend.js"></script>
 </head>
 <body>
@@ -870,6 +871,7 @@ function api(name, ...args) {
 function forceLogout(msg) {
   if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; }
   if (S.notifTimer) { clearInterval(S.notifTimer); S.notifTimer = 0; }
+  if (window.FirebaseBackend && window.FirebaseBackend.apiSignOut) window.FirebaseBackend.apiSignOut().catch(() => {});
   S.token = ''; S.boot = null; store.del('tm.token'); closeDrawer(true); showLogin(msg);
 }
 
@@ -1401,7 +1403,7 @@ function taskRow(t, scope) {
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
     <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
-    <div class="rmain"><div class="title">${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${who}${t.Total ? h`<span class="num">${t.Done}/${t.Total} steps</span>` : ''}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
+    <div class="rmain"><div class="title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${t.IsConfidential ? h`<span class="task-origin">Encrypted</span>` : ''}${t.FileCount ? h`<span>📎 ${t.FileCount} file${t.FileCount > 1 ? 's' : ''}</span>` : ''}${who}${t.Total ? h`<span class="num">${t.Done}/${t.Total} steps</span>` : ''}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
     <div class="side">${t.Total ? h`<span class="prog" title="${pct}%"><i style="width:${pct}%"></i></span>` : ''}<span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
 }
 function renderList(scope) {
@@ -1523,8 +1525,40 @@ function pickerShow(box) {
 function openTask(id) {
   const t = findTask(id); if (!t) return;
   S.openId = id; S.openTask = t;
-  openDrawer(dheadH(t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
-  paintStatus(t); paintChecks(t); loadTaskHistory(id);
+  openDrawer(dheadH((t.IsConfidential ? '🔒 ' : '') + t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
+  paintStatus(t); paintChecks(t); loadTaskFiles(id); loadTaskHistory(id);
+}
+function fmtBytes(b) {
+  const n = Number(b) || 0;
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+async function loadTaskFiles(id) {
+  const box = $('#d-files'); if (!box) return;
+  try {
+    const r = await api('apiListTaskFiles', S.token, id);
+    if (S.openId !== id || !$('#d-files')) return;
+    const files = r.files || [];
+    const t = S.openTask;
+    const canUpload = !!(t && (t.CanUpdate || t.CanManage));
+    mount(box, h`<h3>🔒 Confidential Files (AES-256 Encrypted)</h3>
+      ${files.length ? h`<ul class="checks" style="margin-bottom:8px">${files.map(f => h`<li>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${f.name}</b> <small class="muted">(${fmtBytes(f.sizeBytes)}${f.uploadedBy ? ' · ' + f.uploadedBy : ''})</small></span>
+        <span style="display:inline-flex;gap:6px;flex:none">
+          <button type="button" class="btn sm" data-act="downloadtaskfile" data-id="${f.FileID}" data-busy="Decrypting" ${f.locked ? 'disabled' : ''}>Decrypt &amp; Download</button>
+          ${f.canDelete ? h`<button type="button" class="rm" data-act="deletetaskfile" data-id="${f.FileID}" data-tid="${id}" aria-label="Remove file">✕</button>` : ''}
+        </span>
+      </li>`)}</ul>` : h`<p class="muted" style="margin:4px 0 8px">No confidential files attached yet.</p>`}
+      ${canUpload ? h`<div class="inline-add" style="margin-top:6px;gap:8px;flex-wrap:wrap">
+        <input id="d-file-in" type="file" style="flex:1;min-width:180px;font-size:.84rem">
+        <button type="button" class="btn sm" data-act="uploadtaskfile" data-id="${id}" data-busy="Encrypting">🔒 Encrypt &amp; Attach</button>
+      </div><small class="hint">Encrypted in your browser before upload (max 5 MB per file).</small>` : ''}`);
+  } catch (e) {
+    if (!e.auth && S.openId === id && $('#d-files')) {
+      mount($('#d-files'), h`<h3>🔒 Confidential Files</h3><p class="muted">Could not load files: ${e.message}</p>`);
+    }
+  }
 }
 function taskOrigin(t) { return t.SelfAssigned ? 'Self task' : t.GivenByNazim ? 'Given by Nazim ' + t.AssignedByName : 'Given by ' + t.AssignedByName; }
 function historyLabel(e) {
@@ -1568,6 +1602,15 @@ async function reopenTask(form, btn) {
 }
 function taskBodyH(t) {
   return h`<div class="sec" id="d-status"></div>
+    ${t.IsConfidential ? h`<div class="notice ${t.DecryptLocked ? 'warn' : 'ok'}" style="margin-bottom:12px">
+      ${t.DecryptLocked
+        ? h`<b>🔒 Encrypted Task Locked</b><br><small>Enter your password to unlock your decryption key for this session.</small>
+            <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
+              <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
+            </form>`
+        : h`🔒 <b>Confidential Mode:</b> Title, notes, checklist, and files are end-to-end encrypted (AES-256-GCM).`}
+    </div>` : ''}
     <div class="sec"><dl class="kv">
       <dt>Assigned to</dt><dd>${t.AssignedToName} <small class="muted">${t.AssignedTo}</small></dd>
       <dt>Task type</dt><dd>${taskOrigin(t)}</dd>
@@ -1598,6 +1641,7 @@ function taskBodyH(t) {
       <ul class="checks" id="d-checks"></ul>
       ${t.CanManage ? h`<form class="inline-add" data-form="addcheck" style="margin-top:8px"><input id="d-newck" placeholder="Add a checklist step…" maxlength="200" aria-label="New checklist step" style="height:34px;font-size:.86rem"><button class="btn sm" data-busy="Adding" style="height:34px">Add step</button></form>` : ''}
     </div>
+    <div class="sec" id="d-files"><h3>🔒 Confidential Files</h3><p class="muted">Loading encrypted attachments…</p></div>
     <div class="sec" id="d-history"><h3>Activity</h3><p class="muted">Loading recent activity…</p></div>
     <div class="sec" id="d-actions">${taskActionsH(t)}</div>`;
 }
@@ -1778,7 +1822,18 @@ function newTask() {
         <textarea id="n-desc" maxlength="2000" rows="2" placeholder="Extra instructions or context…" style="min-height:60px"></textarea>
       </label>
 
-      <!-- NOTIFY -->
+      <!-- NOTIFY & CONFIDENTIALITY -->
+      <div class="field" style="margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--line)">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:.85rem;font-weight:600">
+          <input id="n-confidential" type="checkbox" style="width:16px;height:16px;accent-color:var(--brand)">
+          <span>🔒 Mark as Confidential (End-to-End Encrypted)</span>
+        </label>
+        <small class="hint">Encrypts title, notes, and checklist in your browser before saving to Firebase.</small>
+      </div>
+      <div class="field" style="margin:10px 0 0">
+        <span style="font-size:.85rem;font-weight:600">🔒 Attach Confidential Files <small class="muted">(optional, AES-256 encrypted, max 5 MB)</small></span>
+        <input id="n-files" type="file" multiple style="margin-top:4px;font-size:.84rem">
+      </div>
       <div id="n-notify-wrap" class="field" hidden style="margin:10px 0 0">
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:.84rem;color:var(--muted)">
           <input id="n-notify" type="checkbox" style="width:16px;height:16px;accent-color:var(--brand)">
@@ -2173,6 +2228,8 @@ async function createTask(form, btn) {
   }
 
   const notify = !!($('#n-notify')?.checked && targets.some(p => p.c !== S.boot.user.EmpCode));
+  const confidential = !!$('#n-confidential')?.checked;
+  const files = Array.from($('#n-files')?.files || []);
 
   await busy(btn, async () => {
     try {
@@ -2184,8 +2241,16 @@ async function createTask(form, btn) {
         assignedTo: to,
         templateGroups: tplGroups,
         checklist: S.draft.checklist || [],
+        confidential,
         notify
       });
+      if (files.length && r.taskIds && r.taskIds.length) {
+        for (const tid of r.taskIds) {
+          for (const f of files) {
+            await api('apiUploadTaskFile', S.token, tid, f);
+          }
+        }
+      }
       closeDrawer(true);
       toast(r.mail ? (r.mail.error ? r.count + ' tasks created. Email error: ' + r.mail.error : r.mail.queued ? r.count + ' tasks created. Email queued.' : r.count + ' tasks created and emailed.') : r.count + (r.count === 1 ? ' task created.' : ' tasks created.'));
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
@@ -2223,15 +2288,31 @@ async function applyBulkStatus(scope, btn) {
 function openProfile() {
   const u = S.boot.user;
   openDrawer(dheadH(u.EmpName, u.EmpCode), h`<dl class="kv sec"><dt>Role</dt><dd>${u.Role}</dd><dt>Region</dt><dd>${u.Region}${u.Division ? ' / ' + u.Division : ''}</dd><dt>Manager</dt><dd>${u.NazimName || '—'}</dd></dl>
+    <form class="sec" data-form="changepw"><h3>🔒 Change password</h3><p class="muted">Updating your password also re-secures your private encryption key.</p><label class="field"><span>Current password</span><input id="cp-cur" type="password" required autocomplete="current-password"></label><label class="field"><span>New password (min 8 chars)</span><input id="cp-new" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn sm primary" data-busy="Updating">Update password</button></form>
     <form class="sec" data-form="requestemail"><h3>Request email address change</h3><p class="muted">Current email: ${u.Email || 'No email on file'}. An administrator will review your request.</p><label class="field"><span>Requested email address</span><input id="p-email" type="email" required maxlength="254" autocomplete="email"></label><label class="field"><span>Reason for the change</span><textarea id="p-email-reason" required minlength="10" maxlength="1000" rows="3"></textarea></label><button class="btn sm" data-busy="Submitting">Send request to admin</button></form>
     <div class="sec"><h3>Appearance</h3><div class="actions"><div class="seg" role="group" aria-label="Theme">${[['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(x => h`<button type="button" data-act="theme" data-v="${x[0]}" aria-pressed="${(store.get('tm.theme') || '') === x[0]}">${x[1]}</button>`)}</div><div class="seg" role="group" aria-label="Density">${[['', 'Comfortable'], ['compact', 'Compact']].map(x => h`<button type="button" data-act="density" data-v="${x[0]}" aria-pressed="${(store.get('tm.density') || '') === x[0]}">${x[1]}</button>`)}</div></div></div>
     <div class="sec"><h3>Sessions</h3><p class="muted">You stay signed in on this device for about ${S.boot.app.sessionDays} days.</p><div class="actions"><button class="btn" data-act="signout">Sign out</button><button class="btn danger" data-act="signoutall" data-busy="Working">Sign out on all devices</button></div></div>`);
 }
+async function changePassword(form) {
+  await busy($('button', form), async () => {
+    try {
+      await api('apiChangePassword', S.token, $('#cp-cur').value, $('#cp-new').value);
+      toast('Password and encryption key updated.');
+      closeDrawer(true);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  });
+}
 async function requestEmail(form) { await busy($('button', form), async () => { try { await api('apiRequestEmailChange', S.token, $('#p-email').value, $('#p-email-reason').value); toast('Email change request sent to admin.'); closeDrawer(true); } catch (e) { if (!e.auth) toast(e.message, true); } }); }
 async function signOut(all, btn) {
-  const go = () => { if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; } S.token = ''; S.boot = null; S.data = { mine: null, team: null }; store.del('tm.token'); closeDrawer(true); showLogin(); };
+  const go = async () => {
+    if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; }
+    if (!all && window.FirebaseBackend && window.FirebaseBackend.apiSignOut) {
+      await window.FirebaseBackend.apiSignOut().catch(() => {});
+    }
+    S.token = ''; S.boot = null; S.data = { mine: null, team: null }; store.del('tm.token'); closeDrawer(true); showLogin();
+  };
   if (!all) return go();
-  await busy(btn, async () => { try { await api('apiSignOutEverywhere', S.token); go(); } catch (e) { if (!e.auth) toast(e.message, true); } });
+  await busy(btn, async () => { try { await api('apiSignOutEverywhere', S.token); await go(); } catch (e) { if (!e.auth) toast(e.message, true); } });
 }
 
 /* ================= admin ================= */
@@ -2322,7 +2403,7 @@ function openPerson(code) {
     <div class="two"><label class="field"><span>Role</span><select id="pe-role" required>${sel(S.admin.roleNames, p.Role)}</select></label><label class="field"><span>Region</span><select id="pe-region" required>${sel(S.admin.regionNames, p.Region)}</select></label></div>
     <div class="two"><label class="field"><span>Division</span><input id="pe-div" value="${p.Division}" maxlength="80"></label><div class="field"><span>Assign Nazim</span>${pickerH('mgr', src, p.Nazim, 'Type a name or code')}<small class="hint">Choose the employee's Nazim. Leave empty only for the top of a reporting chain.</small></div></div>
     <label class="field"><span>Email</span><input id="pe-email" type="email" value="${p.Email}" required maxlength="254"></label>
-    <label class="field"><span>${isNew ? 'Password' : 'New password'} ${isNew ? '' : (p.Password ? h`<small class="muted">(current: <b style="font-family:monospace;letter-spacing:1px">${p.Password}</b>, leave empty to keep)` : h`<small class="muted">(leave empty to keep current)</small>`)}</span><div class="actions" style="flex-wrap:nowrap"><input id="pe-pw" type="text" autocomplete="off" ${isNew ? 'required' : ''} maxlength="100" style="flex:1;min-height:40px;padding:8px 11px;border:1px solid var(--line2);border-radius:var(--r)"><button type="button" class="btn" data-act="genpw">Generate</button></div><small class="hint">${isNew ? 'This password is active after the employee is added.' : 'Changing this password takes effect immediately in both web app and spreadsheet.'}</small></label>
+    <label class="field"><span>${isNew ? 'Password' : 'New password'} ${isNew ? '' : h`<small class="muted">(leave empty to keep current; for existing users use reset email below)</small>`}</span><div class="actions" style="flex-wrap:nowrap"><input id="pe-pw" type="text" autocomplete="off" ${isNew ? 'required' : ''} maxlength="100" style="flex:1;min-height:40px;padding:8px 11px;border:1px solid var(--line2);border-radius:var(--r)"><button type="button" class="btn" data-act="genpw">Generate</button>${!isNew ? h`<button type="button" class="btn" data-act="sendpwreset" data-c="${p.EmpCode}" data-busy="Sending">Send Reset Email</button>` : ''}</div><small class="hint">${isNew ? 'Initial password (min 6 characters) takes effect immediately.' : 'Existing users reset forgotten passwords via a secure email link.'}</small></label>
     ${!isNew && h`<label class="field" style="display:flex;gap:12px;align-items:center"><span class="sw"><input id="pe-active" type="checkbox" ${p.Active === 'Y' ? 'checked' : ''}><span></span></span><span style="margin:0">Account is active</span></label>`}
     <div id="pe-err" class="notice bad" role="alert" hidden></div></form>`,
     h`<button class="btn" data-act="closedrawer">Cancel</button><button class="btn primary" data-act="submitform" data-f="personForm" data-busy="Saving">${isNew ? 'Add person' : 'Save changes'}</button>`);
@@ -2810,11 +2891,69 @@ const ACT = {
     closeDrawer(true);
     if (taskId) openTask(taskId);
   },
-  shortcuts: () => openShortcutsModal()
+  shortcuts: () => openShortcutsModal(),
+  uploadtaskfile: el => {
+    const id = el.dataset.id, inp = $('#d-file-in');
+    const file = inp && inp.files && inp.files[0];
+    if (!file) { toast('Choose a file first.', true); return; }
+    busy(el, async () => {
+      try {
+        await api('apiUploadTaskFile', S.token, id, file);
+        inp.value = '';
+        toast('File encrypted and attached.');
+        await loadTaskFiles(id);
+        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      } catch (e) { if (!e.auth) toast(e.message, true); }
+    });
+  },
+  downloadtaskfile: el => {
+    const fid = el.dataset.id;
+    busy(el, async () => {
+      try {
+        const r = await api('apiDownloadTaskFile', S.token, fid);
+        const url = URL.createObjectURL(r.blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = r.fileName || 'confidential-file';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        toast('Decrypted "' + (r.fileName || 'file') + '".');
+      } catch (e) { if (!e.auth) toast(e.message, true); }
+    });
+  },
+  deletetaskfile: el => {
+    const fid = el.dataset.id, tid = el.dataset.tid;
+    if (!window.confirm('Delete this encrypted confidential file?')) return;
+    busy(el, async () => {
+      try {
+        await api('apiDeleteTaskFile', S.token, fid);
+        toast('Encrypted file deleted.');
+        await loadTaskFiles(tid);
+        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      } catch (e) { if (!e.auth) toast(e.message, true); }
+    });
+  },
+  sendpwreset: el => {
+    const code = el.dataset.c;
+    busy(el, async () => {
+      try {
+        const r = await api('apiSendPasswordReset', S.token, code);
+        toast(r.message || 'Password reset email sent.');
+      } catch (e) { if (!e.auth) toast(e.message, true); }
+    });
+  }
 };
 const findSubmitBtn = f => f._btn || $(`button[data-f="${f.id}"]`) || $('button.primary', f) || $('#dfoot button.primary');
 const FORMS = {
   quickadd: f => quickAdd(f), login: f => doLogin(f), addcheck: f => addCheck(f), requestemail: f => requestEmail(f), savesettings: f => saveSettings(f), reopentask: f => reopenTask(f, findSubmitBtn(f)),
+  changepw: f => changePassword(f),
+  unlockvault: f => busy($('button', f), async () => {
+    try {
+      await api('apiUnlockVault', S.token, $('#uv-pw').value);
+      toast('Encryption vault unlocked.');
+      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      if (S.openId) openTask(S.openId);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  }),
   savetask: f => { if (!$('.pval', f).value) { const e = $('#e-err'); e.textContent = 'Choose a person from the list.'; e.hidden = false; return; } saveTask(f, findSubmitBtn(f)); },
   createtask: f => createTask(f, findSubmitBtn(f)),
   saveperson: f => savePerson(f, findSubmitBtn(f)),
