@@ -397,7 +397,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .explorer-item-sub{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.82rem;color:var(--muted);margin-top:3px;align-items:center}
 .explorer-item-side{display:flex;align-items:center;gap:10px;flex:none}
 
-/* Pop-up modal screen for per-task due date, checklist & description */
+/* Pop-up modal screen for per-task due date & description */
 .task-modal-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:tmFadeIn .16s ease-out}
 .task-modal-card{background:var(--surface);border-radius:18px;box-shadow:0 24px 38px 3px rgba(0,0,0,.14),0 9px 46px 8px rgba(0,0,0,.12);width:100%;max-width:520px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line);animation:tmSlideUp .2s cubic-bezier(.16,1,.3,1)}
 .task-modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
@@ -740,6 +740,18 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
     bottom: calc(76px + env(safe-area-inset-bottom)) !important;
   }
 }
+.ack-backdrop{position:fixed;inset:0;z-index:95;background:rgba(15,23,42,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:18px}
+.ack-modal{width:min(680px,100%);max-height:90vh;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden}
+.ack-head{padding:18px 22px;border-bottom:1px solid var(--line);background:var(--brand-s)}
+.ack-head h2{margin:0;font-size:1.2rem;color:var(--ink)}
+.ack-head p{margin:6px 0 0;font-size:.9rem;color:var(--muted);line-height:1.45}
+.ack-list{padding:16px 22px;overflow-y:auto;display:grid;gap:12px}
+.ack-card{border:1px solid var(--line2);border-radius:12px;padding:14px 16px;background:var(--paper);display:grid;gap:8px}
+.ack-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.ack-card-title{font-weight:700;font-size:1rem;color:var(--ink)}
+.ack-card-desc{font-size:.88rem;color:var(--muted);white-space:pre-wrap;margin:0;line-height:1.45}
+.ack-card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:4px}
+.ack-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface)}
 </style>
 <!-- Firebase SDKs (Compat v10 for direct browser usage without build tools) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -757,6 +769,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 <div id="scrim" class="scrim"></div>
 <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true"><div class="dhead" id="dhead"></div><div class="dbody" id="dbody"></div><div class="dfoot" id="dfoot" hidden></div></aside>
 <div id="toasts" role="status" aria-live="polite"></div>
+<div id="ack-root"></div>
 <script>
 (function () {
 'use strict';
@@ -810,7 +823,7 @@ const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, seq: {}, fresh: {}, openId: '', openTask: null, draft: { checks: [] }, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
+const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -916,12 +929,75 @@ async function doLogin(form) {
 function enter(r) {
   S.token = r.token || S.token; store.set('tm.token', S.token); S.boot = r; S.appName = r.app.name; document.title = r.app.name;
   S.data.mine = r.mine; S.data.team = r.team; S.fresh.mine = S.fresh.team = Date.now(); S.filters = { mine: {}, team: {} };
+  S.ackTasks = (r.mine && Array.isArray(r.mine.ackTasks)) ? r.mine.ackTasks : [];
   S.selected.mine.clear(); S.selected.team.clear();
   S.dashboard = null; S.dashFilters = {}; S.mailManagerCodes.clear(); S.mailManagerLoaded = false;
   if (S.view === 'team' && !r.user.hasTeam) S.view = 'mine';
   if (S.view === 'dashboard' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   if (S.view === 'mail' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   renderApp();
+  renderAckGate();
+}
+function isAckLocked() { return !!(S.token && S.boot && S.ackTasks && S.ackTasks.length); }
+function renderAckGate() {
+  const root = $('#ack-root'); if (!root) return;
+  const list = isAckLocked() ? S.ackTasks : [];
+  if (!list.length) {
+    root.innerHTML = '';
+    document.body.style.overflow = '';
+    return;
+  }
+  document.body.style.overflow = 'hidden';
+  const hasLocked = list.some(t => t.DecryptLocked);
+  mount(root, h`<div class="ack-backdrop" role="dialog" aria-modal="true" aria-labelledby="ack-title">
+    <div class="ack-modal">
+      <div class="ack-head">
+        <h2 id="ack-title">Task Receipt Confirmation Required</h2>
+        <p>You have <b>${list.length}</b> ${list.length === 1 ? 'task' : 'tasks'} assigned to you by your Nazim / supervisor. Confirm receipt below to automatically move ${list.length === 1 ? 'it' : 'them'} to <b>In Progress</b> and begin work.</p>
+      </div>
+      <div class="ack-list">
+        ${hasLocked ? h`<div class="notice warn" style="margin:0">
+          <b>🔒 Encrypted Task Details Locked</b><br>
+          <small>Enter your password to view confidential task titles before confirming.</small>
+          <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
+            <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
+          </form>
+        </div>` : ''}
+        ${list.map(t => h`<div class="ack-card">
+          <div class="ack-card-top">
+            <span class="task-origin">${taskOrigin(t)}</span>
+            <span class="due" style="${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${t.Overdue ? '🚨 ' : ''}${dueText(t)}</span>
+          </div>
+          <div class="ack-card-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+          ${t.Description ? h`<p class="ack-card-desc">${t.Description}</p>` : ''}
+          <div class="ack-card-foot">
+            <small class="muted">Task ID: ${t.TaskID}</small>
+            <button type="button" class="btn primary sm" data-act="acktask" data-id="${t.TaskID}" data-busy="Confirming">✓ Confirm Received &amp; Start</button>
+          </div>
+        </div>`)}
+      </div>
+      <div class="ack-foot">
+        <small class="muted">Mandatory confirmation — tasks assigned by a Nazim cannot be declined.</small>
+        ${list.length > 1 ? h`<button type="button" class="btn primary" data-act="ackall" data-busy="Confirming all">✓ Confirm All (${list.length}) &amp; Start</button>` : ''}
+      </div>
+    </div>
+  </div>`);
+}
+async function confirmAckTasks(ids, btn) {
+  const clean = (Array.isArray(ids) ? ids : []).filter(Boolean);
+  if (!clean.length) return;
+  await busy(btn, async () => {
+    try {
+      const r = await api('apiAcknowledgeTasks', S.token, clean);
+      const doneSet = new Set(clean);
+      S.ackTasks = (S.ackTasks || []).filter(t => !doneSet.has(t.TaskID));
+      renderAckGate();
+      toast((r.count || clean.length) === 1 ? 'Task confirmed and moved to In Progress.' : `${r.count || clean.length} tasks confirmed and moved to In Progress.`);
+      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      if (S.view === 'dashboard') { delete S.dashFilters.offset; loadDashboard(); }
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  });
 }
 /* ================= app shell ================= */
 const IC = {
@@ -964,7 +1040,7 @@ async function quickAdd(form) {
   await busy(btn, async () => {
     try {
       const dd = toDate(todayKey()); dd.setDate(dd.getDate() + (S.qdue || 0));
-      const r = await api('apiCreateTask', S.token, { tasks: [v], description: '', dueDate: keyOf(dd), assignedTo: [S.boot.user.EmpCode], checklist: [], notify: false });
+      const r = await api('apiCreateTask', S.token, { tasks: [v], description: '', dueDate: keyOf(dd), assignedTo: [S.boot.user.EmpCode], notify: false });
       i.value = ''; toast('Task added.');
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
       setTimeout(() => { const el = $('.row[data-id="' + CSS.escape(r.taskId) + '"]'); if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }, 80);
@@ -1031,10 +1107,6 @@ function renderDashboardShell() {
         </div>
         <div class="actions">
           <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filter controls ▾'}${activeCount ? h` <span class="badge b-PASS">${activeCount}</span>` : ''}</button>
-          <button type="button" class="btn sm ghost" data-act="exportdash" title="Export dashboard tasks to CSV" style="display:inline-flex;align-items:center;gap:6px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            <span>Export CSV</span>
-          </button>
           ${activeCount ? h`<button type="button" class="btn sm danger" data-act="dashreset">Reset filters</button>` : ''}
           <button type="button" class="btn sm primary" data-act="refreshdashboard" data-busy="Refreshing">Refresh</button>
         </div>
@@ -1287,7 +1359,6 @@ function paintDashboardExplorer(box, d) {
             <span>👤 ${t.AssignedToName} <small class="muted">(${t.AssignedTo})</small></span>
             <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
             <span style="${t.Overdue ? 'color:var(--bad);font-weight:600' : ''}">${t.Due ? (t.Overdue ? '🚨 Overdue · ' : '') + 'Due ' + fmtDate(t.Due) : 'No due date'}</span>
-            ${t.Total ? h`<span>✓ ${t.Done}/${t.Total} steps</span>` : ''}
           </div>
         </div>
         <div class="explorer-item-side">
@@ -1359,10 +1430,6 @@ function renderTasksShell(scope) {
       <select data-ch="filter" data-k="region" aria-label="Region">${opt(L.regions, f.region, 'All regions')}</select>
       <select data-ch="filter" data-k="division" aria-label="Division">${opt(L.divisions, f.division, 'All divisions')}</select>
       <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles, f.role, 'All roles')}</select>`}
-      <button type="button" class="btn sm ghost" data-act="exporttasks" title="Export matching tasks to CSV" style="margin-left:auto;white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-        <span>Export CSV</span>
-      </button>
     </div>
     <div id="bulkbar"></div><div id="list"></div><div id="more" class="more-wrap"></div>`);
   renderChips(scope); renderList(scope);
@@ -1376,12 +1443,11 @@ function renderChips(scope) {
 function taskRow(t, scope) {
   const cls = t.Status === 'Completed' ? 'is-done' : t.Overdue ? 'is-over' : t.Status === 'In Progress' ? 'is-prog' : '';
   const who = scope === 'team' ? h`<span>${t.AssignedToName}</span><span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>` : h`<span>From ${t.AssignedByName}</span>`;
-  const pct = t.Total ? Math.round(t.Done * 100 / t.Total) : 0;
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
     <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
-    <div class="rmain"><div class="title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${t.IsConfidential ? h`<span class="task-origin">Encrypted</span>` : ''}${t.FileCount ? h`<span>📎 ${t.FileCount} file${t.FileCount > 1 ? 's' : ''}</span>` : ''}${who}${t.Total ? h`<span class="num">${t.Done}/${t.Total} steps</span>` : ''}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
-    <div class="side">${t.Total ? h`<span class="prog" title="${pct}%"><i style="width:${pct}%"></i></span>` : ''}<span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
+    <div class="rmain"><div class="title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${t.IsConfidential ? h`<span class="task-origin">Encrypted</span>` : ''}${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
+    <div class="side"><span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
 }
 function renderList(scope) {
   const d = S.data[scope], box = $('#list'), more = $('#more'); if (!box) return;
@@ -1418,6 +1484,7 @@ async function loadList(scope, opt) {
     const r = await api('apiListTasks', S.token, f);
     if (seq !== S.seq[scope]) return;
     S.data[scope] = opt.append && d ? Object.assign({}, r, { tasks: d.tasks.concat(r.tasks) }) : r; S.fresh[scope] = Date.now();
+    if (scope === 'mine' && !opt.append && Array.isArray(r.ackTasks)) { S.ackTasks = r.ackTasks; renderAckGate(); }
     if (S.view === scope && $('#list')) { renderChips(scope); renderList(scope); }
     syncOpenTask();
   } catch (e) {
@@ -1468,7 +1535,7 @@ async function setStatus(t, status, skipUndo) {
   }
   catch (e) { applyStatus(t, prev); updateRow(t); if (S.openId === t.TaskID) paintStatus(t); if (!e.auth) toast(e.message, true); }
 }
-function syncOpenTask() { if (!S.openId) return; const t = findTask(S.openId); if (t && t !== S.openTask) { S.openTask = t; paintStatus(t); paintChecks(t); loadTaskHistory(t.TaskID); } }
+function syncOpenTask() { if (!S.openId) return; const t = findTask(S.openId); if (t && t !== S.openTask) { S.openTask = t; paintStatus(t); loadTaskHistory(t.TaskID); } }
 
 /* ================= drawer ================= */
 let drawerClose = null;
@@ -1503,44 +1570,13 @@ function openTask(id) {
   const t = findTask(id); if (!t) return;
   S.openId = id; S.openTask = t;
   openDrawer(dheadH((t.IsConfidential ? '🔒 ' : '') + t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
-  paintStatus(t); paintChecks(t); loadTaskFiles(id); loadTaskHistory(id);
-}
-function fmtBytes(b) {
-  const n = Number(b) || 0;
-  if (n < 1024) return n + ' B';
-  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
-  return (n / 1048576).toFixed(2) + ' MB';
-}
-async function loadTaskFiles(id) {
-  const box = $('#d-files'); if (!box) return;
-  try {
-    const r = await api('apiListTaskFiles', S.token, id);
-    if (S.openId !== id || !$('#d-files')) return;
-    const files = r.files || [];
-    const t = S.openTask;
-    const canUpload = !!(t && (t.CanUpdate || t.CanManage));
-    mount(box, h`<h3>🔒 Confidential Files (AES-256 Encrypted)</h3>
-      ${files.length ? h`<ul class="checks" style="margin-bottom:8px">${files.map(f => h`<li>
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>${f.name}</b> <small class="muted">(${fmtBytes(f.sizeBytes)}${f.uploadedBy ? ' · ' + f.uploadedBy : ''})</small></span>
-        <span style="display:inline-flex;gap:6px;flex:none">
-          <button type="button" class="btn sm" data-act="downloadtaskfile" data-id="${f.FileID}" data-busy="Decrypting" ${f.locked ? 'disabled' : ''}>Decrypt &amp; Download</button>
-          ${f.canDelete ? h`<button type="button" class="rm" data-act="deletetaskfile" data-id="${f.FileID}" data-tid="${id}" aria-label="Remove file">✕</button>` : ''}
-        </span>
-      </li>`)}</ul>` : h`<p class="muted" style="margin:4px 0 8px">No confidential files attached yet.</p>`}
-      ${canUpload ? h`<div class="inline-add" style="margin-top:6px;gap:8px;flex-wrap:wrap">
-        <input id="d-file-in" type="file" style="flex:1;min-width:180px;font-size:.84rem">
-        <button type="button" class="btn sm" data-act="uploadtaskfile" data-id="${id}" data-busy="Encrypting">🔒 Encrypt &amp; Attach</button>
-      </div><small class="hint">Encrypted in your browser before upload (max 5 MB per file).</small>` : ''}`);
-  } catch (e) {
-    if (!e.auth && S.openId === id && $('#d-files')) {
-      mount($('#d-files'), h`<h3>🔒 Confidential Files</h3><p class="muted">Could not load files: ${e.message}</p>`);
-    }
-  }
+  paintStatus(t); loadTaskHistory(id);
 }
 function taskOrigin(t) { return t.SelfAssigned ? 'Self task' : t.GivenByNazim ? 'Given by Nazim ' + t.AssignedByName : 'Given by ' + t.AssignedByName; }
 function historyLabel(e) {
   let d = {}; try { d = JSON.parse(e.details || '{}'); } catch (ignore) {}
   if (e.action === 'TASK_CREATED') return 'created the task';
+  if (e.action === 'TASK_RECEIVED') return 'confirmed receipt and started the task';
   if (e.action === 'TASK_UPDATED') return 'updated ' + (d.fields || []).join(', ');
   if (e.action === 'TASK_STATUS_CHANGED') return 'changed status to ' + (d.status || 'updated');
   if (e.action === 'TASK_REOPENED') return 'reopened the task as ' + (d.status || 'Pending') + '. Remark: ' + (d.remark || '—');
@@ -1586,7 +1622,7 @@ function taskBodyH(t) {
               <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
               <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
             </form>`
-        : h`🔒 <b>Confidential Mode:</b> Title, notes, checklist, and files are end-to-end encrypted (AES-256-GCM).`}
+        : h`🔒 <b>Confidential Mode:</b> Title and notes are end-to-end encrypted (AES-256-GCM).`}
     </div>` : ''}
     <div class="sec"><dl class="kv">
       <dt>Assigned to</dt><dd>${t.AssignedToName} <small class="muted">${t.AssignedTo}</small></dd>
@@ -1610,15 +1646,6 @@ function taskBodyH(t) {
       ${t.Reminders ? h`<dt>Reminders</dt><dd>${t.Reminders} sent${t.LastReminder ? ', last ' + t.LastReminder : ''}</dd>` : ''}
     </dl></div>
     ${t.Description && h`<div class="sec"><h3>Details</h3><p style="white-space:pre-wrap;margin:0">${t.Description}</p></div>`}
-    <div class="sec">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <h3 style="margin:0">Checklist <small id="d-prog" class="muted num"></small></h3>
-        <div class="pbar" style="width:110px"><i id="d-fill"></i></div>
-      </div>
-      <ul class="checks" id="d-checks"></ul>
-      ${t.CanManage ? h`<form class="inline-add" data-form="addcheck" style="margin-top:8px"><input id="d-newck" placeholder="Add a checklist step…" maxlength="200" aria-label="New checklist step" style="height:34px;font-size:.86rem"><button class="btn sm" data-busy="Adding" style="height:34px">Add step</button></form>` : ''}
-    </div>
-    <div class="sec" id="d-files"><h3>🔒 Confidential Files</h3><p class="muted">Loading encrypted attachments…</p></div>
     <div class="sec" id="d-history"><h3>Activity</h3><p class="muted">Loading recent activity…</p></div>
     <div class="sec" id="d-actions">${taskActionsH(t)}</div>`;
 }
@@ -1627,35 +1654,13 @@ function taskActionsH(t) {
 }
 function paintStatus(t) {
   const el = $('#d-status'); if (!el) return;
-  mount(el, t.CanUpdate ? h`<div class="seg" role="group" aria-label="Status">${['Pending', 'In Progress', 'Completed'].map(s => h`<button data-act="status" data-s="${s}" aria-pressed="${t.Status === s}">${s}</button>`)}</div>` : h`<span class="st ${stClass(t.Status)}">${t.Status}</span>`);
+  if (t.NeedsAck && t.CanUpdate) {
+    mount(el, h`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span class="st ${stClass(t.Status)}">${t.Status} · Receipt Pending</span><button type="button" class="btn primary sm" data-act="acktask" data-id="${t.TaskID}" data-busy="Confirming">✓ Confirm Received &amp; Start</button></div>`);
+  } else {
+    const lockPending = !t.SelfAssigned && !t.CanManage && !!t.ReceivedAt;
+    mount(el, t.CanUpdate ? h`<div class="seg" role="group" aria-label="Status">${['Pending', 'In Progress', 'Completed'].map(s => h`<button data-act="status" data-s="${s}" aria-pressed="${t.Status === s}" ${lockPending && s === 'Pending' ? 'disabled title="Confirmed Nazim tasks cannot move back to Pending"' : ''}>${s}</button>`)}</div>` : h`<span class="st ${stClass(t.Status)}">${t.Status}</span>`);
+  }
   const due = $('#d-due'); if (due) { due.style.color = t.Overdue ? 'var(--bad)' : ''; due.style.fontWeight = t.Overdue ? '600' : ''; due.textContent = t.Due ? fmtDate(t.Due) + ' · ' + dueText(t) : 'No due date'; }
-}
-function paintChecks(t) {
-  const ul = $('#d-checks'); if (!ul) return;
-  const done = t.Checklist.filter(x => x.done).length, pct = t.Checklist.length ? Math.round(done * 100 / t.Checklist.length) : 0;
-  const prog = $('#d-prog'), fill = $('#d-fill');
-  if (prog) prog.textContent = t.Checklist.length ? done + ' of ' + t.Checklist.length : '';
-  if (fill) fill.style.width = pct + '%';
-  mount(ul, t.Checklist.length ? h`${t.Checklist.map(x => h`<li class="${x.done ? 'done' : ''}"><label><input type="checkbox" data-ch="check" data-id="${x.id}" ${x.done ? 'checked' : ''} ${t.CanUpdate ? '' : 'disabled'}><span>${x.text}</span></label>${t.CanManage && h`<button class="rm" data-act="rmcheck" data-id="${x.id}" aria-label="Remove step">✕</button>`}</li>`)}` : h`<li><small class="muted">No checklist steps yet.${t.CanManage ? ' You can add a step below.' : ''}</small></li>`);
-}
-async function toggleCheck(t, itemId, done) {
-  const it = t.Checklist.find(x => x.id === itemId); if (!it) return;
-  it.done = done; t.Done = t.Checklist.filter(x => x.done).length; paintChecks(t); updateRow(t);
-  try { await api('apiUpdateTask', S.token, t.TaskID, { checklist: [{ id: itemId, done }] }); if (done && t.Done === t.Total && t.Status !== 'Completed') toast('All steps done. You can mark the task as completed.'); }
-  catch (e) { it.done = !done; t.Done = t.Checklist.filter(x => x.done).length; paintChecks(t); updateRow(t); if (!e.auth) toast(e.message, true); }
-}
-async function addCheck(form) {
-  const t = S.openTask, inp = $('#d-newck'), text = inp.value.trim(); if (!t || !text) return;
-  await busy($('button', form), async () => {
-    try { const r = await api('apiAddChecklistItem', S.token, t.TaskID, text); t.Checklist.push(r.item); t.Total = t.Checklist.length; inp.value = ''; paintChecks(t); updateRow(t); inp.focus(); }
-    catch (e) { if (!e.auth) toast(e.message, true); }
-  });
-}
-async function removeCheck(t, itemId) {
-  const idx = t.Checklist.findIndex(x => x.id === itemId); if (idx < 0) return;
-  const [gone] = t.Checklist.splice(idx, 1); t.Total = t.Checklist.length; t.Done = t.Checklist.filter(x => x.done).length; paintChecks(t); updateRow(t);
-  try { await api('apiRemoveChecklistItem', S.token, t.TaskID, itemId); }
-  catch (e) { t.Checklist.splice(idx, 0, gone); t.Total = t.Checklist.length; t.Done = t.Checklist.filter(x => x.done).length; paintChecks(t); updateRow(t); if (!e.auth) toast(e.message, true); }
 }
 async function askRemind(t, btn) {
   const box = $('#d-actions'); mount(box, h`<div class="notice">Checking today's mail allowance…</div>`);
@@ -1699,7 +1704,6 @@ function newTask() {
     alsoTeam: false,
     includeSelf: false,
     tasks: [],
-    checklist: [],
     assignees: new Set(),
     tpl: {},
     requestId: newRequestId()
@@ -1783,16 +1787,6 @@ function newTask() {
         </div>
       </div>
 
-      <!-- CHECKLIST -->
-      <div class="field" style="margin:12px 0 0">
-        <span style="font-size:.85rem;font-weight:600">Checklist Steps <small class="muted">(optional)</small></span>
-        <div id="n-checks"></div>
-        <div class="inline-add" style="margin-top:6px">
-          <input id="n-checkItem" maxlength="200" placeholder="Add a checklist step…" style="height:36px;font-size:.88rem">
-          <button type="button" class="btn sm" data-act="addcheckitem" style="height:36px;padding:0 12px">Add</button>
-        </div>
-      </div>
-
       <!-- NOTE -->
       <label class="field" style="margin:12px 0 0">
         <span style="font-size:.85rem;font-weight:600">Note / Description <small class="muted">(optional)</small></span>
@@ -1805,11 +1799,7 @@ function newTask() {
           <input id="n-confidential" type="checkbox" style="width:16px;height:16px;accent-color:var(--brand)">
           <span>🔒 Mark as Confidential (End-to-End Encrypted)</span>
         </label>
-        <small class="hint">Encrypts title, notes, and checklist in your browser before saving to Firebase.</small>
-      </div>
-      <div class="field" style="margin:10px 0 0">
-        <span style="font-size:.85rem;font-weight:600">🔒 Attach Confidential Files <small class="muted">(optional, AES-256 encrypted, max 5 MB)</small></span>
-        <input id="n-files" type="file" multiple style="margin-top:4px;font-size:.84rem">
+        <small class="hint">Encrypts title and notes in your browser before saving to Firebase.</small>
       </div>
       <div id="n-notify-wrap" class="field" hidden style="margin:10px 0 0">
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:.84rem;color:var(--muted)">
@@ -1939,22 +1929,6 @@ function paintDraft() {
   paintDraftPreview();
 }
 
-function paintNewChecks() {
-  const box = $('#n-checks'); if (!box) return;
-  mount(box, h`<ul class="checks">${(S.draft.checklist || []).map((x, i) => h`<li><label><span>${x}</span></label><button type="button" class="rm" style="opacity:1" data-act="rmcheckitem" data-i="${i}" aria-label="Remove step">✕</button></li>`)}</ul>`);
-}
-
-function addCheckItem() {
-  const i = $('#n-checkItem'), v = i ? i.value.trim() : ''; if (!v) return;
-  if ((S.draft.checklist || []).length >= 40) return toast('You can add up to 40 checklist steps.', true);
-  S.draft.checklist = S.draft.checklist || [];
-  S.draft.checklist.push(v);
-  i.value = '';
-  paintNewChecks();
-  paintDraftPreview();
-  i.focus();
-}
-
 function addTaskTitle(val) {
   const i = $('#n-taskTitle');
   const v = (val !== undefined ? val : (i ? i.value : '')).trim();
@@ -1984,7 +1958,6 @@ function paintDraftPreview() {
   const templateCount = entries.length;
   const totalTasks = selfManualCount + teamManualCount + templateCount;
 
-  const stepsCount = (S.draft.checklist || []).length;
   const dueVal = $('#n-due')?.value || todayKey();
 
   const tplGroups = {};
@@ -2011,7 +1984,6 @@ function paintDraftPreview() {
           <div class="preview-task-tags">
             <span class="preview-tag self">👤 You</span>
             <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">📅 Due ${fmtDate(dueVal)}</span>
-            ${stepsCount ? h`<span class="preview-tag steps">✓ ${stepsCount} step${stepsCount === 1 ? '' : 's'}</span>` : ''}
             ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">📝 Notes</span>` : ''}
           </div>
         </div>
@@ -2026,7 +1998,6 @@ function paintDraftPreview() {
           <div class="preview-task-tags">
             <span class="preview-tag team">👥 ${emp.n}</span>
             <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">📅 Due ${fmtDate(dueVal)}</span>
-            ${stepsCount ? h`<span class="preview-tag steps">✓ ${stepsCount} step${stepsCount === 1 ? '' : 's'}</span>` : ''}
             ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">📝 Notes</span>` : ''}
           </div>
         </div>
@@ -2048,14 +2019,6 @@ function paintDraftPreview() {
           <span style="font-weight:600;color:var(--brand)">📅 Due ${fmtDate(dueVal)}</span>
         </div>
         ${t.description ? h`<div class="tpl-card-desc">${t.description}</div>` : ''}
-        ${t.checklist && t.checklist.length ? h`
-          <div class="tpl-card-steps">
-            <span style="font-weight:700;font-size:.78rem;color:var(--muted)">Checklist steps (${t.checklist.length}):</span>
-            <ul class="tpl-steps-list">
-              ${t.checklist.slice(0, 4).map(s => h`<li>${s}</li>`)}
-              ${t.checklist.length > 4 ? h`<li class="muted">+ ${t.checklist.length - 4} more steps</li>` : ''}
-            </ul>
-          </div>` : ''}
         <button type="button" class="btn ghost sm tpl-rm-btn" data-act="rmtpl" data-role="${g.role}" data-id="${g.id}" title="Remove template">✕</button>
       </div>`;
     })}
@@ -2146,10 +2109,7 @@ function paintTemplates() {
             <div style="flex:1;min-width:0">
               <div style="font-weight:600;font-size:.9rem;color:var(--ink)">${t.title}</div>
               ${t.description ? h`<div style="font-size:.8rem;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.description}</div>` : ''}
-              <div style="display:flex;gap:6px;align-items:center;margin-top:4px;font-size:.76rem;color:var(--muted)">
-                <span class="badge b-PASS">${(t.checklist || []).length ? t.checklist.length + ' step(s)' : 'No checklist'}</span>
-                ${t.all || !t.roles.length ? h`<span class="badge" style="background:var(--soft);color:var(--ink)">All roles</span>` : ''}
-              </div>
+              ${t.all || !t.roles.length ? h`<div style="display:flex;gap:6px;align-items:center;margin-top:4px;font-size:.76rem;color:var(--muted)"><span class="badge" style="background:var(--soft);color:var(--ink)">All roles</span></div>` : ''}
             </div>
           </label>`;
         })}
@@ -2164,7 +2124,6 @@ function paintTemplates() {
 async function createTask(form, btn) {
   const err = $('#n-err'); err.hidden = true;
   addTaskTitle();
-  if ($('#n-checkItem')?.value.trim()) addCheckItem();
 
   const taskTitles = (S.draft.tasks || []).map(x => x.trim()).filter(Boolean);
   const targets = selectedTargets();
@@ -2206,7 +2165,6 @@ async function createTask(form, btn) {
 
   const notify = !!($('#n-notify')?.checked && targets.some(p => p.c !== S.boot.user.EmpCode));
   const confidential = !!$('#n-confidential')?.checked;
-  const files = Array.from($('#n-files')?.files || []);
 
   await busy(btn, async () => {
     try {
@@ -2217,17 +2175,9 @@ async function createTask(form, btn) {
         dueDate: dueDate || todayKey(),
         assignedTo: to,
         templateGroups: tplGroups,
-        checklist: S.draft.checklist || [],
         confidential,
         notify
       });
-      if (files.length && r.taskIds && r.taskIds.length) {
-        for (const tid of r.taskIds) {
-          for (const f of files) {
-            await api('apiUploadTaskFile', S.token, tid, f);
-          }
-        }
-      }
       closeDrawer(true);
       toast(r.mail ? (r.mail.error ? r.count + ' tasks created. Email error: ' + r.mail.error : r.mail.queued ? r.count + ' tasks created. Email queued.' : r.count + ' tasks created and emailed.') : r.count + (r.count === 1 ? ' task created.' : ' tasks created.'));
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
@@ -2266,7 +2216,6 @@ function openProfile() {
   const u = S.boot.user;
   openDrawer(dheadH(u.EmpName, u.EmpCode), h`<dl class="kv sec"><dt>Role</dt><dd>${u.Role}</dd><dt>Region</dt><dd>${u.Region}${u.Division ? ' / ' + u.Division : ''}</dd><dt>Manager</dt><dd>${u.NazimName || '—'}</dd></dl>
     <form class="sec" data-form="changepw"><h3>🔒 Change password</h3><p class="muted">Updating your password also re-secures your private encryption key.</p><label class="field"><span>Current password</span><input id="cp-cur" type="password" required autocomplete="current-password"></label><label class="field"><span>New password (min 8 chars)</span><input id="cp-new" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn sm primary" data-busy="Updating">Update password</button></form>
-    <form class="sec" data-form="requestemail"><h3>Request email address change</h3><p class="muted">Current email: ${u.Email || 'No email on file'}. An administrator will review your request.</p><label class="field"><span>Requested email address</span><input id="p-email" type="email" required maxlength="254" autocomplete="email"></label><label class="field"><span>Reason for the change</span><textarea id="p-email-reason" required minlength="10" maxlength="1000" rows="3"></textarea></label><button class="btn sm" data-busy="Submitting">Send request to admin</button></form>
     <div class="sec"><h3>Appearance</h3><div class="actions"><div class="seg" role="group" aria-label="Theme">${[['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(x => h`<button type="button" data-act="theme" data-v="${x[0]}" aria-pressed="${(store.get('tm.theme') || '') === x[0]}">${x[1]}</button>`)}</div><div class="seg" role="group" aria-label="Density">${[['', 'Comfortable'], ['compact', 'Compact']].map(x => h`<button type="button" data-act="density" data-v="${x[0]}" aria-pressed="${(store.get('tm.density') || '') === x[0]}">${x[1]}</button>`)}</div></div></div>
     <div class="sec"><h3>Sessions</h3><p class="muted">You stay signed in on this device for about ${S.boot.app.sessionDays} days.</p><div class="actions"><button class="btn" data-act="signout">Sign out</button><button class="btn danger" data-act="signoutall" data-busy="Working">Sign out on all devices</button></div></div>`);
 }
@@ -2279,7 +2228,6 @@ async function changePassword(form) {
     } catch (e) { if (!e.auth) toast(e.message, true); }
   });
 }
-async function requestEmail(form) { await busy($('button', form), async () => { try { await api('apiRequestEmailChange', S.token, $('#p-email').value, $('#p-email-reason').value); toast('Email change request sent to admin.'); closeDrawer(true); } catch (e) { if (!e.auth) toast(e.message, true); } }); }
 async function signOut(all, btn) {
   const go = async () => {
     if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; }
@@ -2293,7 +2241,7 @@ async function signOut(all, btn) {
 }
 
 /* ================= admin ================= */
-const ADMIN_TABS = [['overview', 'Overview'], ['emailrequests', 'Email requests'], ['people', 'People'], ['roles', 'Roles'], ['templates', 'Task templates'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
+const ADMIN_TABS = [['overview', 'Overview'], ['people', 'People'], ['roles', 'Roles'], ['templates', 'Task templates'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
 function renderAdmin() {
   mount($('#view'), h`<div class="subtabs" role="tablist">${ADMIN_TABS.map(t => h`<button class="subtab" role="tab" data-act="admintab" data-t="${t[0]}" ${S.adminTab === t[0] ? 'aria-current=page' : ''}>${t[1]}</button>`)}</div><div id="adm"></div>`);
   adminLoad();
@@ -2302,7 +2250,6 @@ async function adminLoad() {
   const tab = S.adminTab, box = $('#adm'); mount(box, h`<div class="panel"><div class="sk" style="height:18px;width:30%;margin-bottom:14px"></div><div class="sk" style="height:12px;width:80%;margin-bottom:8px"></div><div class="sk" style="height:12px;width:60%"></div></div>`);
   try {
     if (tab === 'overview') await adminOverview();
-    else if (tab === 'emailrequests') await adminEmailRequests();
     else if (tab === 'people') await adminPeople();
     else if (tab === 'roles') await adminRoles();
     else if (tab === 'templates') await adminTemplates();
@@ -2312,13 +2259,6 @@ async function adminLoad() {
   } catch (e) { if (!e.auth && S.adminTab === tab) mount($('#adm'), h`<div class="empty"><b>Could not load</b>${e.message}<p><button class="btn sm" data-act="admintab" data-t="${tab}">Try again</button></p></div>`); }
 }
 const inAdmin = t => S.view === 'admin' && S.adminTab === t && $('#adm');
-
-async function adminEmailRequests() {
-  const r = await api('apiAdminEmailChangeRequests', S.token); if (!inAdmin('emailrequests')) return;
-  S.admin.emailRequests = r.requests;
-  mount($('#adm'), h`<div class="panel"><h3>Pending email address requests</h3><p class="muted">Approving updates the employee's email immediately. Confirm the request and reason before approving.</p>
-    ${r.requests.filter(x => x.status === 'PENDING').length ? h`<div class="scroll-x"><table class="tbl"><thead><tr><th>Employee</th><th>Current</th><th>Requested</th><th>Reason</th><th>Requested at</th><th>Review</th></tr></thead><tbody>${r.requests.filter(x => x.status === 'PENDING').map(x => h`<tr><td><b>${x.empName}</b><br><small>${x.empCode}</small></td><td>${x.currentEmail}</td><td>${x.requestedEmail}</td><td>${x.reason}</td><td>${x.requestedAt}</td><td><button class="btn sm primary" data-act="reviewemail" data-id="${x.requestId}" data-decision="APPROVED">Approve</button> <button class="btn sm danger" data-act="reviewemail" data-id="${x.requestId}" data-decision="REJECTED">Reject</button></td></tr>`)}</tbody></table></div>` : h`<div class="empty">No pending requests.</div>`}</div>`);
-}
 
 async function adminOverview() {
   const r = await api('apiAdminOverview', S.token); if (!inAdmin('overview')) return;
@@ -2334,37 +2274,19 @@ async function adminOverview() {
     <div class="panel"><h3>Actions</h3><div class="actions">
       <button class="btn" data-act="runmail" data-busy="Sending">Run queued and reminder mail</button>
       <button class="btn" data-act="retryquota" data-busy="Queuing">Queue quota-blocked mail for tomorrow</button>
-      <button class="btn" data-act="refreshdash" data-busy="Refreshing">Refresh dashboard sheet</button>
       <button class="btn" data-act="testmail" data-busy="Sending">Send a test mail to me</button>
       <button class="btn" data-act="backupnow" data-busy="Backing up">Run backup now</button>
-      <button class="btn" data-act="archivenow" data-busy="Archiving">Archive completed tasks</button>
-      <button class="btn" data-act="timers" data-busy="Installing">Install timers</button></div>
-      <p style="margin-top:12px"><span class="dot ${r.timers.daily ? 'on' : 'off'}"></span>Daily reminder timer ${r.timers.daily ? 'is running' : 'is not installed'} &nbsp; <span class="dot ${r.timers.dashboard ? 'on' : 'off'}"></span>Dashboard timer ${r.timers.dashboard ? 'is running' : 'is not installed'}</p>
-      <p class="muted" style="margin-top:6px;font-size:.85rem">Last automated backup: <b>${r.lastBackup || 'Never'}</b> &nbsp;·&nbsp; Last archived: <b>${r.lastArchive || 'Never'}</b></p></div>
-    <div class="panel"><h3>Links</h3><p style="margin:4px 0"><a href="${r.urls.system}" target="_blank" rel="noopener">Open the data spreadsheet (private)</a></p><p style="margin:4px 0"><a href="${r.urls.dashboard}" target="_blank" rel="noopener">Open the dashboard spreadsheet (share view-only)</a></p>${r.urls.app && h`<p style="margin:4px 0" class="muted">App link: ${r.urls.app}</p>`}<p class="muted" style="margin-top:8px">Version ${r.version}</p></div>`);
+      <button class="btn" data-act="archivenow" data-busy="Archiving">Archive completed tasks</button></div>
+      <p class="muted" style="margin-top:10px;font-size:.85rem">Last backup: <b>${r.lastBackup || 'Never'}</b> &nbsp;·&nbsp; Last archived: <b>${r.lastArchive || 'Never'}</b></p></div>
+    <div class="panel"><h3>Firebase &amp; App Links</h3><p style="margin:4px 0"><a href="${r.urls.system}" target="_blank" rel="noopener">Open Firebase Firestore Database</a></p><p style="margin:4px 0"><a href="${r.urls.dashboard}" target="_blank" rel="noopener">Open Firebase Authentication</a></p>${r.urls.app && h`<p style="margin:4px 0" class="muted">App link: ${r.urls.app}</p>`}<p class="muted" style="margin-top:8px">Version ${r.version}</p></div>`);
 }
 
 async function adminPeople() {
   const r = await api('apiAdminPeople', S.token); if (!inAdmin('people')) return;
   S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.q = S.admin.q || '';
   mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><button class="btn primary" data-act="addperson">+ Add person</button></div>
-    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role</th><th>Region</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>
-    <div class="panel"><h3>Add many people at once</h3><ol class="muted" style="margin:0 0 12px;padding-left:20px"><li>Open the private data spreadsheet and go to the <b>Employees_Import</b> sheet.</li><li>Paste one person per row. Enter their initial password in <b>Password</b> as plain text; this preserves leading zeros and long numeric passwords. It becomes active after import. In <b>Nazim</b>, enter their manager's employee code.</li><li>Each employee can report to one Nazim; a Nazim can have any number of employees.</li><li>Click <b>Import now</b>. Imported employees and their passwords are saved directly into the <b>Employees</b> sheet with live synchronization.</li><li>The import sheet can now be cleared freely; click <b>Clear import sheet</b> anytime to free up the sheet for your next import batch.</li></ol>
-      <div class="actions"><button class="btn" data-act="import" data-busy="Importing">Import now</button><button class="btn ghost sm" data-act="clearimport" data-busy="Clearing" style="margin-left:8px;color:#b42318">Clear import sheet</button></div><div id="imp-out" style="margin-top:12px"></div></div>
-    <div class="panel"><h3>Send passwords to selected employees</h3><p class="muted">Choose only the imported employees who should receive their credentials. Passwords are sent by email, so use this only when appropriate for your organization.</p><div class="actions"><button class="btn sm" data-act="credentialrecipients" data-busy="Refreshing">Refresh list</button><button class="btn sm" data-act="selectcredentialrecipients">Select ready</button><button class="btn sm" data-act="clearcredentialrecipients">Clear</button></div><div id="credential-list" style="margin-top:10px"><div class="notice">Loading eligible employees…</div></div><button class="btn primary" style="margin-top:12px" data-act="sendcredentials" data-busy="Sending">Email selected passwords</button><div id="credentials-out" style="margin-top:12px"></div></div>`);
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role</th><th>Region</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
   paintPeople();
-  S.admin.credentialSelection = S.admin.credentialSelection || new Set();
-  loadCredentialRecipients();
-}
-
-async function loadCredentialRecipients() {
-  try { const r = await api('apiCredentialRecipients', S.token); if (!inAdmin('people')) return; S.admin.credentialRecipients = r.recipients || []; paintCredentialRecipients(); }
-  catch (e) { if (!e.auth && inAdmin('people')) mount($('#credential-list'), h`<div class="notice bad">${e.message}</div>`); }
-}
-function paintCredentialRecipients() {
-  const box = $('#credential-list'); if (!box) return;
-  const rows = S.admin.credentialRecipients || [], selected = S.admin.credentialSelection || new Set();
-  mount(box, rows.length ? h`<div class="manager-mail-list">${rows.map(p => h`<label class="manager-mail-option"><input type="checkbox" data-ch="credentialrecipient" data-code="${p.code}" ${selected.has(p.code) ? 'checked' : ''} ${p.selectable ? '' : 'disabled'}><span><b>${p.name || '(Name missing)'}</b> · ${p.code} · ${p.email || 'No email'}<br><small class="muted">${p.status}</small></span></label>`)}</div><small class="hint">${selected.size} selected. Previously sent and review-required rows are disabled.</small>` : h`<div class="empty">No rows were found in Employees_Import.</div>`);
 }
 function paintPeople() {
   const q = (S.admin.q || '').toLowerCase(), by = {}; S.admin.people.forEach(p => { by[p.EmpCode] = p; });
@@ -2401,17 +2323,16 @@ const tplShownFor = t => t.all ? h`<span class="task-origin">All designations</s
 function paintAdminTemplates() {
   const list = S.admin.tpls || [];
   mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">Task templates</h3><button class="btn primary" data-act="newtpl">+ New template</button></div>
-    <p class="muted">A template is a ready-made task (title, description, checklist). Nazims and admins pick it instead of typing. Choose which <b>designations</b> each template is shown for; the designation is the one held by the <b>employee receiving</b> the task. Switch a template off to hide it from everyone without deleting it.</p>
-    ${list.length ? h`<div class="scroll-x"><table class="tbl"><thead><tr><th>Template</th><th>Steps</th><th>Shown for</th><th>On</th><th></th></tr></thead><tbody>${list.map(t => h`<tr><td><b>${t.title}</b>${t.description && h`<br><small class="muted">${t.description.length > 90 ? t.description.slice(0, 90) + '…' : t.description}</small>`}</td><td class="num">${t.checklist.length}</td><td>${tplShownFor(t)}</td><td><label class="sw"><input type="checkbox" data-ch="tplactive" data-id="${t.id}" ${t.active ? 'checked' : ''} aria-label="Template is on"><span></span></label></td><td><button class="btn sm" data-act="edittpl" data-id="${t.id}">Edit</button></td></tr>`)}</tbody></table></div>` : h`<div class="empty"><b>No templates yet</b>Create your first one, for example “Prepare monthly salary register”.</div>`}</div>`);
+    <p class="muted">A template is a ready-made task (title, description). Nazims and admins pick it instead of typing. Choose which <b>designations</b> each template is shown for; the designation is the one held by the <b>employee receiving</b> the task. Switch a template off to hide it from everyone without deleting it.</p>
+    ${list.length ? h`<div class="scroll-x"><table class="tbl"><thead><tr><th>Template</th><th>Shown for</th><th>On</th><th></th></tr></thead><tbody>${list.map(t => h`<tr><td><b>${t.title}</b>${t.description && h`<br><small class="muted">${t.description.length > 90 ? t.description.slice(0, 90) + '…' : t.description}</small>`}</td><td>${tplShownFor(t)}</td><td><label class="sw"><input type="checkbox" data-ch="tplactive" data-id="${t.id}" ${t.active ? 'checked' : ''} aria-label="Template is on"><span></span></label></td><td><button class="btn sm" data-act="edittpl" data-id="${t.id}">Edit</button></td></tr>`)}</tbody></table></div>` : h`<div class="empty"><b>No templates yet</b>Create your first one, for example “Prepare monthly salary register”.</div>`}</div>`);
 }
 function openTemplate(id) {
   const found = id ? (S.admin.tpls || []).find(x => x.id === id) : null, isNew = !found;
-  const t = found || { id: '', title: '', description: '', checklist: [], all: false, roles: [], active: true };
+  const t = found || { id: '', title: '', description: '', all: false, roles: [], active: true };
   const known = S.admin.tplRoles || [], gone = t.roles.filter(r => known.indexOf(r) < 0);
   openDrawer(dheadH(isNew ? 'New template' : 'Edit template', isNew ? '' : t.title), h`<form id="tplForm" data-form="savetemplate" data-id="${t.id}">
     <label class="field"><span>Title <small class="muted">(this becomes the task title)</small></span><input id="tp-title" maxlength="200" required autofocus value="${t.title}"></label>
     <label class="field"><span>Description <small class="muted">(optional)</small></span><textarea id="tp-desc" maxlength="2000">${t.description}</textarea></label>
-    <label class="field"><span>Checklist steps <small class="muted">(one per line, optional)</small></span><textarea id="tp-steps" rows="5" maxlength="4000">${t.checklist.join('\n')}</textarea><small class="hint">Up to 40 steps. Every task created from this template gets these steps.</small></label>
     <div class="field"><span>Shown for these designations</span>
       <label class="assignee-option" style="border-bottom:0"><input type="checkbox" id="tp-all" data-ch="tplall" ${t.all ? 'checked' : ''}><span><b>All designations</b></span></label>
       <div class="assignee-list" id="tp-roles">${known.concat(gone).map(r => h`<label class="assignee-option"><input type="checkbox" name="tp-role" value="${r}" ${t.roles.indexOf(r) >= 0 ? 'checked' : ''} ${t.all ? 'disabled' : ''}><span>${r}${gone.indexOf(r) >= 0 ? ' (no longer active)' : ''}</span></label>`)}</div>
@@ -2422,7 +2343,7 @@ function openTemplate(id) {
 }
 async function saveTemplate(form, btn) {
   const err = $('#tp-err'); err.hidden = true;
-  const body = { id: form.dataset.id, title: $('#tp-title').value, description: $('#tp-desc').value, checklist: $('#tp-steps').value.split(/\r?\n/), all: $('#tp-all').checked, roles: $$('input[name="tp-role"]:checked', form).map(x => x.value), active: $('#tp-active').checked };
+  const body = { id: form.dataset.id, title: $('#tp-title').value, description: $('#tp-desc').value, all: $('#tp-all').checked, roles: $$('input[name="tp-role"]:checked', form).map(x => x.value), active: $('#tp-active').checked };
   await busy(btn, async () => {
     try { await api('apiSaveTemplate', S.token, body); closeDrawer(true); toast('Template saved.'); if (inAdmin('templates')) adminTemplates(); }
     catch (e) { err.textContent = e.message; err.hidden = false; }
@@ -2500,19 +2421,7 @@ function paintTests(r) {
     ${Object.keys(groups).map(g => h`<h3 style="margin:16px 0 4px">${g === 'Logic' ? 'Rules' : g === 'Setup' ? 'Your setup' : 'Live walk-through'}</h3><ul class="tests">${groups[g].map(i => h`<li><span class="badge b-${i.status}">${i.status}</span><div><b>${i.name}</b>${i.detail && h`<small class="muted">${i.detail}</small>`}</div></li>`)}</ul>`)}`);
 }
 
-/* ================= export & shortcuts ================= */
-function downloadCsv(content, filename) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || ('tasks_export_' + todayKey() + '.csv');
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
+/* ================= shortcuts ================= */
 function openShortcutsModal() {
   openDrawer(dheadH('Keyboard Shortcuts'), h`
     <div style="display:grid;gap:12px;padding:6px 0">
@@ -2551,10 +2460,6 @@ const ACT = {
   chip: el => { const sc = S.view, f = S.filters[sc], k = el.dataset.k; delete f.status; delete f.overdue; if (k === 'over') f.overdue = true; else if (k !== 'all') f.status = k; renderChips(sc); loadList(sc, { silent: true }); },
   clear: () => { S.filters[S.view] = {}; renderTasksShell(S.view); loadList(S.view, { silent: true }); },
   retry: () => loadList(S.view), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
-  credentialrecipients: el => busy(el, async () => { S.admin.credentialSelection.clear(); await loadCredentialRecipients(); }),
-  selectcredentialrecipients: () => { S.admin.credentialSelection = new Set((S.admin.credentialRecipients || []).filter(x => x.selectable).slice(0, 100).map(x => x.code)); paintCredentialRecipients(); if ((S.admin.credentialRecipients || []).filter(x => x.selectable).length > 100) toast('Selected the first 100 ready employees. Send this batch, then select the remaining employees.', true); },
-  clearcredentialrecipients: () => { S.admin.credentialSelection.clear(); paintCredentialRecipients(); },
-  rmcheck: el => S.openTask && removeCheck(S.openTask, el.dataset.id),
   remind: el => S.openTask && askRemind(S.openTask, el), sendremind: el => S.openTask && sendRemind(S.openTask, el), cancelremind: () => S.openTask && mount($('#d-actions'), taskActionsH(S.openTask)),
   edittask: el => { const t = findTask(el.dataset.id); if (t) editTask(t); }, canceledit: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   deletetask: el => {
@@ -2574,18 +2479,6 @@ const ACT = {
   },
   submitform: el => { const f = document.getElementById(el.dataset.f); if (f) { f._btn = el; f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); } },
   due: el => { if ($('#n-due')) { $('#n-due').value = addDays(Number(el.dataset.d)); paintDraftPreview(); } },
-  clearimport: el => {
-    if (!window.confirm('Clear all imported employee rows from the Employees_Import sheet? All active employees and passwords remain safely preserved in the Employees sheet.')) return;
-    busy(el, async () => {
-      try {
-        const r = await api('apiClearEmployeesImport', S.token);
-        mount($('#imp-out'), h`<div class="notice ok">${r.message}</div>`);
-        await loadCredentialRecipients();
-      } catch (e) {
-        mount($('#imp-out'), h`<div class="notice bad">${e.message}</div>`);
-      }
-    });
-  },
   addtasktitle: () => addTaskTitle(),
   rmtasktitle: el => { S.draft.tasks.splice(Number(el.dataset.i), 1); paintDraft(); },
   rmtasktitlebyname: el => {
@@ -2610,8 +2503,8 @@ const ACT = {
     });
     paintTemplates();
   },
-  addcheckitem: () => addCheckItem(),
-  rmcheckitem: el => { S.draft.checklist.splice(Number(el.dataset.i), 1); paintNewChecks(); paintDraftPreview(); },
+  acktask: el => confirmAckTasks([el.dataset.id], el),
+  ackall: el => confirmAckTasks((S.ackTasks || []).map(t => t.TaskID), el),
   userrecentdue: el => {
     const v = el.dataset.val;
     if (!v) return;
@@ -2620,14 +2513,6 @@ const ACT = {
       inp.value = v;
       paintDraftPreview();
     }
-  },
-  userrecentchecklist: () => {
-    const recent = store.get('tm.lastChecklist') || [];
-    if (!recent.length) return toast('No recent checklist available.', true);
-    S.draft.checklist = [...recent];
-    paintNewChecks();
-    paintDraftPreview();
-    toast('Loaded ' + recent.length + ' step(s) from recent checklist.');
   },
   toggleeditdue: () => {
     const box = $('#d-due-edit-box');
@@ -2730,12 +2615,6 @@ const ACT = {
   dashreset: () => { S.dashFilters = {}; S.dashboard = null; loadDashboard(); },
   dashkpi: el => { const status = el.dataset.status || ''; if (status) S.dashFilters.status = status; else delete S.dashFilters.status; delete S.dashFilters.offset; S.dashTab = 'drilldown'; loadDashboard(); },
   dashmore: () => { if (!S.dashboard || !S.dashboard.drilldown || !S.dashboard.drilldown.hasMore) return; S.dashFilters.offset = S.dashboard.drilldown.nextOffset; loadDashboard(true); },
-  reviewemail: el => {
-    const approve = el.dataset.decision === 'APPROVED';
-    if (!window.confirm(approve ? 'Approve this email change? This updates the employee account immediately.' : 'Reject this email change request?')) return;
-    const note = window.prompt('Optional note for the review record:') || '';
-    busy(el, async () => { try { await api('apiReviewEmailChangeRequest', S.token, el.dataset.id, el.dataset.decision, note); toast(approve ? 'Email change approved.' : 'Email change rejected.'); adminEmailRequests(); } catch (e) { if (!e.auth) toast(e.message, true); } });
-  },
   cancelreopen: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   pick: el => { const box = el.closest('.picker'); $('.pin', box).value = el.dataset.n + ' (' + el.dataset.c + ')'; $('.pval', box).value = el.dataset.c; $('.plist', box).hidden = true; },
   showpw: el => { const i = $('#li-pw'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.textContent = show ? 'Hide' : 'Show'; },
@@ -2745,13 +2624,6 @@ const ACT = {
   newtpl: () => openTemplate(''), edittpl: el => openTemplate(el.dataset.id),
   deltpl: el => { if (!window.confirm('Delete this template? Tasks already created from it are not affected.')) return; busy(el, async () => { try { await api('apiDeleteTemplate', S.token, el.dataset.id); closeDrawer(true); toast('Template deleted.'); if (inAdmin('templates')) adminTemplates(); } catch (e) { if (!e.auth) toast(e.message, true); } }); },
   genpw: () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', v = new Uint32Array(12); (window.crypto || window.msCrypto).getRandomValues(v); $('#pe-pw').value = Array.from(v, x => a[x % a.length]).join('') + '9'; },
-  import: el => busy(el, async () => { try { const r = await api('apiImportEmployees', S.token); mount($('#imp-out'), r.ok ? h`<div class="notice ok">${r.message}</div>` : h`<div class="notice bad">${r.errors.join('\n')}</div>`); if (r.ok) { const r2 = await api('apiAdminPeople', S.token); S.admin.people = r2.people; paintPeople(); await loadCredentialRecipients(); } } catch (e) { mount($('#imp-out'), h`<div class="notice bad">${e.message}</div>`); } }),
-  sendcredentials: el => {
-    const codes = Array.from(S.admin.credentialSelection || []);
-    if (!codes.length) { toast('Select at least one employee first.', true); return; }
-    if (!window.confirm('Email employee ID and password to ' + codes.length + ' selected employee(s)? Email is not a secure channel for passwords.')) return;
-    busy(el, async () => { try { const r = await api('apiSendImportedCredentials', S.token, codes); mount($('#credentials-out'), h`<div class="notice ${r.review || r.waiting ? 'warn' : 'ok'}">${r.message} Review CredentialEmailStatus and CredentialEmailNote in Employees_Import if any rows need attention.</div>`); S.admin.credentialSelection.clear(); await loadCredentialRecipients(); } catch (e) { if (!e.auth) mount($('#credentials-out'), h`<div class="notice bad">${e.message}</div>`); } });
-  },
   addrole: () => { S.admin.roles.push({ Role: '', Level: 20, Chain: 'Custom', IsHeadOffice: false, IsAdmin: false, Active: true, isNew: true }); paintRoles(); },
   rmrole: el => { S.admin.roles.splice(Number(el.dataset.i), 1); paintRoles(); },
   saveroles: el => busy(el, async () => { const err = $('#rl-err'); err.hidden = true; try { await api('apiSaveRoles', S.token, S.admin.roles.map(r => ({ Role: r.Role, Level: r.Level, Chain: r.Chain, IsHeadOffice: r.IsHeadOffice, IsAdmin: r.IsAdmin, Active: r.Active }))); toast('Roles saved.'); adminRoles(); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
@@ -2760,74 +2632,13 @@ const ACT = {
   savesched: el => busy(el, async () => { const err = $('#sc-err'); err.hidden = true; try { await api('apiSaveSchedule', S.token, S.admin.sched.map(s => ({ Role: s.Role, Region: s.Region, DayOfWeek: s.DayOfWeek, DayOfMonth: s.DayOfMonth, Active: s.Active === 'Y' }))); toast('Schedule saved.'); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
   runmail: el => busy(el, async () => { try { const r = await api('apiRunMailNow', S.token); toast(r.sent + ' emails sent, ' + r.newDigests + ' new reminders prepared.'); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   retryquota: el => busy(el, async () => { try { const r = await api('apiRetryQueuedMailTomorrow', S.token); toast(r.message); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  refreshdash: el => busy(el, async () => { try { const r = await api('apiRefreshDashboard', S.token); toast('Dashboard refreshed (' + r.rows + ' tasks).'); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   testmail: el => busy(el, async () => { try { const r = await api('apiSendTestMail', S.token); toast(r.message); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   backupnow: el => busy(el, async () => { try { const r = await api('apiRunBackupNow', S.token); toast('Backup created: ' + (r.name || 'Success')); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   archivenow: el => busy(el, async () => { try { const r = await api('apiArchiveCompletedTasks', S.token); toast(r.message || 'Archival complete'); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  timers: el => busy(el, async () => { try { await api('apiInstallTriggers', S.token); toast('Timers installed.'); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   runtest: el => busy(el, async () => { mount($('#sys-out'), h`<div class="notice">Running checks. Please keep this page open…</div>`); try { paintTests(await api('apiRunSelfTest', S.token, !!el.dataset.full)); } catch (e) { mount($('#sys-out'), h`<div class="notice bad">${e.message}</div>`); } }),
   repair: el => busy(el, async () => { try { const r = await api('apiRepair', S.token); toast(r.repaired.length ? 'Repaired: ' + r.repaired.join('; ') : 'Nothing needed fixing.'); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   demo: el => busy(el, async () => { try { const r = await api('apiDemoData', S.token, el.dataset.m); toast(el.dataset.m === 'make' ? 'Demo data created. Password: ' + r.password : 'Demo data removed.'); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  exporttasks: el => busy(el, async () => {
-    try {
-      const sc = S.view;
-      const f = Object.assign({}, S.filters[sc] || {}, { scope: sc });
-      const r = await api('apiExportTasks', S.token, f);
-      if (!r.csv || !r.count) { toast('No tasks found to export.', true); return; }
-      downloadCsv(r.csv, r.filename);
-      toast('Exported ' + r.count + ' task(s) to CSV.');
-    } catch (e) { if (!e.auth) toast(e.message, true); }
-  }),
-  exportdash: el => busy(el, async () => {
-    try {
-      const f = Object.assign({}, S.dashFilters || {}, { scope: 'team' });
-      const r = await api('apiExportTasks', S.token, f);
-      if (!r.csv || !r.count) { toast('No tasks found to export.', true); return; }
-      downloadCsv(r.csv, r.filename);
-      toast('Exported ' + r.count + ' dashboard task(s) to CSV.');
-    } catch (e) { if (!e.auth) toast(e.message, true); }
-  }),
   shortcuts: () => openShortcutsModal(),
-  uploadtaskfile: el => {
-    const id = el.dataset.id, inp = $('#d-file-in');
-    const file = inp && inp.files && inp.files[0];
-    if (!file) { toast('Choose a file first.', true); return; }
-    busy(el, async () => {
-      try {
-        await api('apiUploadTaskFile', S.token, id, file);
-        inp.value = '';
-        toast('File encrypted and attached.');
-        await loadTaskFiles(id);
-        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
-      } catch (e) { if (!e.auth) toast(e.message, true); }
-    });
-  },
-  downloadtaskfile: el => {
-    const fid = el.dataset.id;
-    busy(el, async () => {
-      try {
-        const r = await api('apiDownloadTaskFile', S.token, fid);
-        const url = URL.createObjectURL(r.blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = r.fileName || 'confidential-file';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        toast('Decrypted "' + (r.fileName || 'file') + '".');
-      } catch (e) { if (!e.auth) toast(e.message, true); }
-    });
-  },
-  deletetaskfile: el => {
-    const fid = el.dataset.id, tid = el.dataset.tid;
-    if (!window.confirm('Delete this encrypted confidential file?')) return;
-    busy(el, async () => {
-      try {
-        await api('apiDeleteTaskFile', S.token, fid);
-        toast('Encrypted file deleted.');
-        await loadTaskFiles(tid);
-        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
-      } catch (e) { if (!e.auth) toast(e.message, true); }
-    });
-  },
   sendpwreset: el => {
     const code = el.dataset.c;
     busy(el, async () => {
@@ -2840,7 +2651,7 @@ const ACT = {
 };
 const findSubmitBtn = f => f._btn || $(`button[data-f="${f.id}"]`) || $('button.primary', f) || $('#dfoot button.primary');
 const FORMS = {
-  quickadd: f => quickAdd(f), login: f => doLogin(f), addcheck: f => addCheck(f), requestemail: f => requestEmail(f), savesettings: f => saveSettings(f), reopentask: f => reopenTask(f, findSubmitBtn(f)),
+  quickadd: f => quickAdd(f), login: f => doLogin(f), savesettings: f => saveSettings(f), reopentask: f => reopenTask(f, findSubmitBtn(f)),
   changepw: f => changePassword(f),
   unlockvault: f => busy($('button', f), async () => {
     try {
@@ -2863,6 +2674,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault(); const fn = FORMS[f.dataset.form]; if (fn) fn(f, e); });
 document.addEventListener('keydown', e => {
+  if (isAckLocked()) { if (e.key === 'Escape') e.preventDefault(); return; }
   const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement && document.activeElement.tagName);
   const isDrawerOpen = $('#drawer') && $('#drawer').classList.contains('open');
 
@@ -2892,7 +2704,6 @@ document.addEventListener('keydown', e => {
   }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row,.tbl tr.click')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.id === 'n-taskTitle') { e.preventDefault(); addTaskTitle(); }
-  if (e.key === 'Enter' && e.target.id === 'n-checkItem') { e.preventDefault(); addCheckItem(); }
 });
 const applyFilter = debounce((scope) => loadList(scope, { silent: true }), 300);
 const applyDraftPreview = debounce(() => paintDraftPreview(), 150);
@@ -2910,10 +2721,8 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target;
-  if (el.dataset.ch === 'credentialrecipient') { if (el.checked) S.admin.credentialSelection.add(el.dataset.code); else S.admin.credentialSelection.delete(el.dataset.code); paintCredentialRecipients(); }
-  else if (el.dataset.ch === 'filter') { const f = S.filters[S.view]; if (el.value) f[el.dataset.k] = el.value; else delete f[el.dataset.k]; loadList(S.view, { silent: true }); }
+  if (el.dataset.ch === 'filter') { const f = S.filters[S.view]; if (el.value) f[el.dataset.k] = el.value; else delete f[el.dataset.k]; loadList(S.view, { silent: true }); }
   else if (el.dataset.ch === 'dashfilter') { if (el.value) S.dashFilters[el.dataset.k] = el.value; else delete S.dashFilters[el.dataset.k]; delete S.dashFilters.offset; loadDashboard(); }
-  else if (el.dataset.ch === 'check') { const t = S.openTask; if (t) toggleCheck(t, el.dataset.id, el.checked); }
   else if (el.id === 'n-due') paintDraftPreview();
   else if (el.dataset.ch === 'assignee') {
     if (el.checked) S.draft.assignees.add(el.dataset.c);
