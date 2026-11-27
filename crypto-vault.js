@@ -12,11 +12,66 @@
 
   const SESSION_PRIV_KEY = 'tm.vault.priv';
   const SESSION_CODE_KEY = 'tm.vault.code';
+  const IDB_NAME = 'tm_vault_v1';
+  const IDB_STORE = 'keys';
+  const IDB_KEY = 'current';
   const PBKDF2_ITERATIONS = 100000;
 
   let _privKey = null;
   let _pubKey = null;
+  let _pubJwk = null;
   let _empCode = '';
+
+  function openVaultDb() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('IndexedDB unavailable'));
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('IndexedDB error'));
+    });
+  }
+
+  async function idbPut(record) {
+    try {
+      const db = await openVaultDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(record, IDB_KEY);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      });
+    } catch (e) { /* Ignore storage restrictions (e.g. private browsing) */ }
+  }
+
+  async function idbGet() {
+    try {
+      const db = await openVaultDb();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+        req.onsuccess = () => { db.close(); resolve(req.result || null); };
+        req.onerror = () => { db.close(); reject(req.error); };
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function idbDelete() {
+    try {
+      const db = await openVaultDb();
+      await new Promise((resolve) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete(IDB_KEY);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); resolve(); };
+      });
+    } catch (e) { /* Ignore */ }
+  }
 
   function ensureWebCrypto() {
     if (!window.crypto || !window.crypto.subtle) {
@@ -136,33 +191,80 @@
     const privJwk = await subtle.exportKey('jwk', privateKey);
     _privKey = privateKey;
     _pubKey = await importPublicKey(publicJwk);
+    _pubJwk = publicJwk;
     _empCode = empCode;
     try {
       sessionStorage.setItem(SESSION_CODE_KEY, empCode);
       sessionStorage.setItem(SESSION_PRIV_KEY, JSON.stringify({ priv: privJwk, pub: publicJwk }));
     } catch (e) { /* Ignore storage quota issues */ }
+    // Persist across tabs & browser restarts wrapped under a non-extractable device key in IndexedDB
+    try {
+      const deviceWrapKey = await subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['wrapKey', 'unwrapKey']
+      );
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const wrappedPriv = await subtle.wrapKey('pkcs8', privateKey, deviceWrapKey, { name: 'AES-GCM', iv });
+      await idbPut({
+        empCode,
+        deviceWrapKey,
+        iv: bytesToB64(iv),
+        wrappedPriv: bytesToB64(new Uint8Array(wrappedPriv)),
+        pub: publicJwk,
+        savedAt: Date.now()
+      });
+    } catch (e) { /* Fallback gracefully to sessionStorage only */ }
   }
 
   async function restoreSession(empCode) {
     if (_privKey && _empCode === empCode) return true;
+    const subtle = ensureWebCrypto();
     try {
       const savedCode = sessionStorage.getItem(SESSION_CODE_KEY);
       const raw = sessionStorage.getItem(SESSION_PRIV_KEY);
-      if (!savedCode || savedCode !== empCode || !raw) return false;
-      const parsed = JSON.parse(raw);
-      const subtle = ensureWebCrypto();
-      _privKey = await subtle.importKey(
-        'jwk',
-        parsed.priv,
+      if (savedCode && savedCode === empCode && raw) {
+        const parsed = JSON.parse(raw);
+        _privKey = await subtle.importKey(
+          'jwk',
+          parsed.priv,
+          { name: 'RSA-OAEP', hash: 'SHA-256' },
+          true,
+          ['unwrapKey']
+        );
+        _pubKey = await importPublicKey(parsed.pub);
+        _pubJwk = parsed.pub;
+        _empCode = empCode;
+        return true;
+      }
+    } catch (e) { /* Try IndexedDB next */ }
+
+    try {
+      const rec = await idbGet();
+      if (!rec || rec.empCode !== empCode || !rec.deviceWrapKey || !rec.wrappedPriv || !rec.iv || !rec.pub) {
+        return false;
+      }
+      const priv = await subtle.unwrapKey(
+        'pkcs8',
+        b64ToBytes(rec.wrappedPriv),
+        rec.deviceWrapKey,
+        { name: 'AES-GCM', iv: b64ToBytes(rec.iv) },
         { name: 'RSA-OAEP', hash: 'SHA-256' },
         true,
         ['unwrapKey']
       );
-      _pubKey = await importPublicKey(parsed.pub);
+      _privKey = priv;
+      _pubKey = await importPublicKey(rec.pub);
+      _pubJwk = rec.pub;
       _empCode = empCode;
+      try {
+        const privJwk = await subtle.exportKey('jwk', priv);
+        sessionStorage.setItem(SESSION_CODE_KEY, empCode);
+        sessionStorage.setItem(SESSION_PRIV_KEY, JSON.stringify({ priv: privJwk, pub: rec.pub }));
+      } catch (ignore) {}
       return true;
     } catch (e) {
-      clearSession();
+      await clearSession();
       return false;
     }
   }
@@ -170,11 +272,37 @@
   function clearSession() {
     _privKey = null;
     _pubKey = null;
+    _pubJwk = null;
     _empCode = '';
     try {
       sessionStorage.removeItem(SESSION_CODE_KEY);
       sessionStorage.removeItem(SESSION_PRIV_KEY);
     } catch (e) { /* Ignore */ }
+    idbDelete();
+  }
+
+  function getPublicJwk() {
+    return _pubJwk || null;
+  }
+
+  // Provision an initial keypair when an Admin creates a new employee account (without replacing Admin's active session)
+  async function provisionUserKey(db, empCode, initialPassword) {
+    if (!empCode || !initialPassword) return false;
+    const subtle = ensureWebCrypto();
+    const docRef = db.collection('userKeys').doc(empCode);
+    const snap = await docRef.get();
+    if (snap.exists && snap.data().publicKeyJwk) return false;
+    const pair = await generateUserKeypair();
+    const publicKeyJwk = await subtle.exportKey('jwk', pair.publicKey);
+    const wrappedPrivateKey = await wrapPrivateKeyWithPassword(pair.privateKey, initialPassword);
+    await docRef.set({
+      EmpCode: empCode,
+      publicKeyJwk,
+      wrappedPrivateKey,
+      keyVersion: 1,
+      updatedAt: new Date()
+    });
+    return true;
   }
 
   function isUnlocked(empCode) {
@@ -296,9 +424,11 @@
 
   window.CryptoVault = {
     initForUser,
+    provisionUserKey,
     restoreSession,
     clearSession,
     isUnlocked,
+    getPublicJwk,
     rewrapOnPasswordChange,
     generateDek,
     wrapDekForRecipients,
