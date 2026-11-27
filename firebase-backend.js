@@ -30,11 +30,13 @@
 
   const TM_STATUSES = ['Pending', 'In Progress', 'Completed'];
   const TM_APP_ROLES = ['User', 'Division Admin', 'State Admin', 'Region Admin'];
-  const TM_REGIONS = ['Mumbai', 'Hyderabad', 'Kolkata', 'Bangalore', 'Delhi', 'Ajmer'];
-  const TM_HO_ROLES = [
-    'Compliance Head Office', 'Compliance Team CA',
-    'Assistant Compliance Manager', 'Compliance Manager',
-    'Compliance Head', 'System Admin', 'Admin'
+  const TM_INDIA_STATES = [
+    'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
+    'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa',
+    'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka',
+    'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
+    'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan', 'Sikkim',
+    'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
   ];
   const PAGE_SIZE = 50;
   const TM_TPL_ALL = '*';
@@ -210,32 +212,6 @@
     });
   }
 
-  function tmStandardRolesMap_() {
-    const roles = {};
-    const add = (chain, names) => names.forEach((name, i) => {
-      const level = (i + 1) * 10;
-      if (roles[name]) {
-        roles[name].Level = Math.max(roles[name].Level, level);
-        if (roles[name].Chain.split(',').indexOf(chain) < 0) roles[name].Chain += ',' + chain;
-      } else {
-        roles[name] = {
-          Role: name,
-          Level: level,
-          Chain: chain,
-          IsHeadOffice: TM_HO_ROLES.indexOf(name) >= 0,
-          IsAdmin: false,
-          Active: true
-        };
-      }
-    });
-    add('1', ['Accountant', 'Accountant Supervisor', 'Region Accountant Supervisor', 'Region Finance']);
-    add('2', ['Division Finance', 'State Finance', 'Region Finance']);
-    add('3', ['Regional Compliance Staff', 'Regional Compliance Supervisor', 'Compliance Head Office', 'Compliance Team CA', 'Assistant Compliance Manager', 'Compliance Manager', 'Compliance Head']);
-    add('4', ['Regional Compliance Staff', 'Regional Compliance Supervisor', 'Region Finance']);
-    roles['System Admin'] = { Role: 'System Admin', Level: 1000, Chain: 'Custom', IsHeadOffice: true, IsAdmin: true, Active: true };
-    return roles;
-  }
-
   async function tmAudit_(empCode, action, target, details) {
     try {
       await db.collection('auditLog').add({
@@ -253,18 +229,9 @@
   async function tmEnsureSeedLists_() {
     const rolesSnap = await db.collection('roles').get();
     if (rolesSnap.empty) {
-      const std = tmStandardRolesMap_();
-      std['Admin'] = { Role: 'Admin', Level: 1000, Chain: 'Admin', IsHeadOffice: true, IsAdmin: true, Active: true };
-      const b = db.batch();
-      Object.values(std).forEach(r => b.set(db.collection('roles').doc(r.Role), r));
-      await b.commit();
-    }
-
-    const regSnap = await db.collection('regions').get();
-    if (regSnap.empty) {
-      const b = db.batch();
-      TM_REGIONS.forEach(r => b.set(db.collection('regions').doc(r), { Region: r, Active: true }));
-      await b.commit();
+      await db.collection('roles').doc('Admin').set({
+        Role: 'Admin', ParentRole: '', Level: 1, Chain: 'Admin', IsHeadOffice: true, IsAdmin: true, Active: true
+      });
     }
 
     const cfgRef = db.collection('config').doc('app_config');
@@ -356,6 +323,7 @@
         const r = d.data() || {};
         roles.push({
           Role: String(r.Role || d.id || '').trim(),
+          ParentRole: String(r.ParentRole || '').trim(),
           Level: Number(r.Level) || 0,
           Chain: String(r.Chain || ''),
           IsHeadOffice: tmYes_(r.IsHeadOffice),
@@ -363,13 +331,13 @@
           Active: tmYes_(r.Active)
         });
       });
-      return roles.filter(r => r.Role).sort((a, b) => a.Role.localeCompare(b.Role));
+      return roles.filter(r => r.Role).sort((a, b) => (a.Level || 999) - (b.Level || 999) || a.Role.localeCompare(b.Role));
     });
   }
 
   async function tmRegions_() {
     return memoGet('regions', async () => {
-      if (!initFirebase()) return TM_REGIONS.map(r => ({ Region: r, Country: 'India', Active: true }));
+      if (!initFirebase()) return [];
       const snap = await db.collection('regions').get();
       const list = [];
       snap.forEach(d => {
@@ -689,17 +657,6 @@
     Object.keys(final).forEach(c => { managers[c] = final[c].Nazim; });
     const cycle = tmFindCycle_(managers);
     if (cycle) errs.push('Reporting line loop: ' + cycle.join(' -> ') + ' -> ' + cycle[0] + '.');
-
-    const rf = {};
-    Object.keys(final).forEach(c => {
-      const e = final[c];
-      if (e.Active === 'Y' && e.Role === 'Region Finance') {
-        (rf[e.Region] = rf[e.Region] || []).push(c);
-      }
-    });
-    Object.keys(rf).forEach(r => {
-      if (rf[r].length > 1) errs.push(`Region ${r} already has an active Region Finance (${rf[r].join(', ')}).`);
-    });
 
     return errs;
   }
@@ -1315,6 +1272,7 @@
       const mergedDivNames = Array.from(new Set(activeDivs.map(x => x.Division).concat(Object.keys(divisions)))).sort();
       out.lists = {
         regions: regionsList.filter(x => x.Active).map(x => x.Region),
+        indiaStates: TM_INDIA_STATES,
         states: statesList.filter(x => x.Active).map(x => ({ State: x.State, Region: x.Region })),
         divisionsList: activeDivs.map(x => ({ Division: x.Division, State: x.State, Region: x.Region })),
         divisions: mergedDivNames,
@@ -1322,7 +1280,6 @@
         appRoles: TM_APP_ROLES,
         statuses: TM_STATUSES
       };
-      if (!out.lists.regions.length) out.lists.regions = TM_REGIONS;
 
       out.mine = await Backend.apiListTasks(token, { scope: 'mine' });
       out.team = null;
@@ -2738,6 +2695,7 @@
         people,
         roles: roles.filter(x => x.Active).map(x => x.Role),
         regions: regions.filter(x => x.Active).map(x => x.Region),
+        indiaStates: TM_INDIA_STATES,
         states: states.filter(x => x.Active).map(x => ({ State: x.State, Region: x.Region })),
         divisions: divisions.filter(x => x.Active).map(x => ({ Division: x.Division, State: x.State, Region: x.Region })),
         appRoles: TM_APP_ROLES
@@ -2912,7 +2870,12 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      return { ok: true, roles: await tmRoles_() };
+      const [roles, h] = await Promise.all([tmRoles_(), tmHierarchy_()]);
+      const inUse = {};
+      Object.keys(h.byCode).forEach(c => {
+        if (h.byCode[c].Active === 'Y' && h.byCode[c].Role) inUse[h.byCode[c].Role] = (inUse[h.byCode[c].Role] || 0) + 1;
+      });
+      return { ok: true, roles, inUse };
     },
 
     apiSaveRoles: async function (token, roles) {
@@ -2924,6 +2887,7 @@
       const seen = {};
       const clean = roles.map(r => ({
         Role: tmClip_(r.Role, 80),
+        ParentRole: tmClip_(r.ParentRole, 80),
         Level: Number(r.Level) || 0,
         Chain: tmClip_(r.Chain || 'Custom', 30) || 'Custom',
         IsHeadOffice: tmYes_(r.IsHeadOffice),
@@ -2935,6 +2899,27 @@
         if (!r.Role) throw new Error(`Row ${i + 1}: role name is empty.`);
         if (seen[r.Role.toLowerCase()]) throw new Error(`The role "${r.Role}" appears twice.`);
         seen[r.Role.toLowerCase()] = true;
+      });
+
+      const roleNameSet = new Set(clean.map(r => r.Role));
+      const parentMap = {};
+      clean.forEach(r => {
+        if (r.ParentRole === r.Role) throw new Error(`Role "${r.Role}" cannot report to itself.`);
+        if (r.ParentRole && !roleNameSet.has(r.ParentRole)) throw new Error(`Parent role "${r.ParentRole}" for "${r.Role}" does not exist.`);
+        parentMap[r.Role] = r.ParentRole || '';
+      });
+      const roleCycle = tmFindCycle_(parentMap);
+      if (roleCycle) throw new Error('Role hierarchy loop: ' + roleCycle.join(' -> ') + ' -> ' + roleCycle[0] + '.');
+
+      // Compute tree depth as Level if not explicitly ordered (1 = top level)
+      const depthOf = (name, trail = new Set()) => {
+        if (!name || trail.has(name)) return 1;
+        trail.add(name);
+        const p = parentMap[name];
+        return p ? 1 + depthOf(p, trail) : 1;
+      };
+      clean.forEach(r => {
+        if (!r.Level || r.ParentRole) r.Level = depthOf(r.Role);
       });
 
       const h = await tmHierarchy_();
@@ -2989,7 +2974,71 @@
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
       const [regions, states, divisions] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
-      return { ok: true, regions, states, divisions };
+      return { ok: true, regions, states, divisions, indiaStates: TM_INDIA_STATES };
+    },
+
+    apiDeleteLocation: async function (token, kind, id) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      const [hier, regions, states, divisions] = await Promise.all([tmHierarchy_(), tmRegions_(), tmStates_(), tmDivisions_()]);
+      const emps = Object.values(hier.byCode);
+
+      if (kind === 'region') {
+        const reg = regions.find(r => (r.id || r.Region) === id || r.Region === id);
+        if (!reg) return { ok: true };
+        if (states.some(s => s.Region === reg.Region)) throw new Error(`Remove states under "${reg.Region}" before deleting this Region.`);
+        if (emps.some(e => e.Region === reg.Region)) throw new Error(`Employees are assigned to Region "${reg.Region}".`);
+        await db.collection('regions').doc(reg.id || reg.Region).delete();
+      } else if (kind === 'state') {
+        const st = states.find(s => s.id === id);
+        if (!st) return { ok: true };
+        if (divisions.some(d => d.Region === st.Region && d.State === st.State)) throw new Error(`Remove divisions under "${st.State}" before deleting this State.`);
+        if (emps.some(e => e.Region === st.Region && e.State === st.State)) throw new Error(`Employees are assigned to State "${st.State}".`);
+        await db.collection('states').doc(st.id).delete();
+      } else if (kind === 'division') {
+        const dv = divisions.find(d => d.id === id);
+        if (!dv) return { ok: true };
+        if (emps.some(e => e.Region === dv.Region && e.State === dv.State && e.Division === dv.Division)) throw new Error(`Employees are assigned to Division "${dv.Division}".`);
+        await db.collection('divisions').doc(dv.id).delete();
+      } else {
+        throw new Error('Unknown location type.');
+      }
+      memoClear();
+      await tmAudit_(user.EmpCode, 'LOCATION_DELETE', kind + ':' + id, {});
+      return { ok: true };
+    },
+
+    apiClearUnusedLocations: async function (token) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      const [hier, regions, states, divisions] = await Promise.all([tmHierarchy_(), tmRegions_(), tmStates_(), tmDivisions_()]);
+      const emps = Object.values(hier.byCode);
+      const batch = db.batch();
+      let removed = 0;
+
+      const keptDivs = [];
+      divisions.forEach(d => {
+        const used = emps.some(e => e.Region === d.Region && e.State === d.State && e.Division === d.Division);
+        if (!used) { batch.delete(db.collection('divisions').doc(d.id)); removed++; }
+        else keptDivs.push(d);
+      });
+      const keptStates = [];
+      states.forEach(s => {
+        const used = keptDivs.some(d => d.Region === s.Region && d.State === s.State) || emps.some(e => e.Region === s.Region && e.State === s.State);
+        if (!used) { batch.delete(db.collection('states').doc(s.id)); removed++; }
+        else keptStates.push(s);
+      });
+      regions.forEach(r => {
+        const used = keptStates.some(s => s.Region === r.Region) || emps.some(e => e.Region === r.Region);
+        if (!used) { batch.delete(db.collection('regions').doc(r.id || r.Region)); removed++; }
+      });
+
+      if (removed) await batch.commit();
+      memoClear();
+      await tmAudit_(user.EmpCode, 'LOCATIONS_CLEANUP', 'locations', { removed });
+      return { ok: true, removed };
     },
 
     apiSaveLocation: async function (token, kind, input) {
@@ -3063,6 +3112,7 @@
         roles: roles.filter(r => r.Active).map(r => r.Role),
         allRoleNames: roles.map(r => r.Role),
         appRoles: TM_APP_ROLES,
+        indiaStates: TM_INDIA_STATES,
         regions: regions.filter(r => r.Active).map(r => r.Region),
         states: states.filter(s => s.Active).map(s => ({ State: s.State, Region: s.Region })),
         divisions: divisions.filter(d => d.Active).map(d => ({ Division: d.Division, State: d.State, Region: d.Region })),
@@ -3195,9 +3245,11 @@
           return;
         }
         batchSeen.add(low);
+        const parentRole = tmClip_(raw.ParentRole, 80);
         const rec = {
           Role: roleName,
-          Level: Number(raw.Level) || 20,
+          ParentRole: parentRole,
+          Level: Number(raw.Level) || (parentRole ? 2 : 1),
           Chain: tmClip_(raw.Chain || 'Custom', 30) || 'Custom',
           IsHeadOffice: tmYes_(raw.IsHeadOffice),
           IsAdmin: tmYes_(raw.IsAdmin),
@@ -3585,29 +3637,12 @@
       if (!access.admin) throw new Error('Administrator access is required.');
 
       const repaired = [];
-      const stdRoles = tmStandardRolesMap_();
       const roleSnap = await db.collection('roles').get();
-      const existingRoles = new Set();
-      roleSnap.forEach(d => existingRoles.add(d.id));
-      const b = db.batch();
-      let addedRoles = 0;
-      Object.values(stdRoles).forEach(r => {
-        if (!existingRoles.has(r.Role)) {
-          b.set(db.collection('roles').doc(r.Role), r);
-          addedRoles++;
-        }
-      });
-      if (addedRoles) {
-        await b.commit();
-        repaired.push(`Added ${addedRoles} standard company role(s)`);
-      }
-
-      const regSnap = await db.collection('regions').get();
-      if (regSnap.empty) {
-        const rb = db.batch();
-        TM_REGIONS.forEach(r => rb.set(db.collection('regions').doc(r), { Region: r, Active: true }));
-        await rb.commit();
-        repaired.push('Seeded default regions');
+      if (roleSnap.empty) {
+        await db.collection('roles').doc('Admin').set({
+          Role: 'Admin', ParentRole: '', Level: 1, Chain: 'Admin', IsHeadOffice: true, IsAdmin: true, Active: true
+        });
+        repaired.push('Initialized base Admin role');
       }
 
       const cfgRef = db.collection('config').doc('app_config');
@@ -3758,7 +3793,7 @@
 
       await purgeDemo();
       const regs = (await tmRegions_()).filter(r => r.Active).map(r => r.Region);
-      const region = regs[0] || 'Mumbai';
+      const region = regs[0] || 'Demo Region';
       const now = new Date();
       const demoPeople = [
         { EmpCode: 'DEMO-RAS', EmpName: 'Demo Region Supervisor', Nazim: '', Role: 'Region Accountant Supervisor' },
