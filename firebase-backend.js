@@ -2224,6 +2224,61 @@
       return { ok: true, taskId: id };
     },
 
+    // 7b. Bulk Delete Tasks (Admin or Nazim for subordinate employee tasks only; never self/received)
+    apiBulkDeleteTasks: async function (token, ids) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      const wanted = Array.isArray(ids) ? Array.from(new Set(ids.map(String).filter(Boolean))) : [];
+      if (!wanted.length || wanted.length > 100) throw new Error('Select between 1 and 100 tasks.');
+      if (!access.admin && access.sub.size === 0) {
+        throw new Error('Only a Nazim (for employee tasks) or an administrator can delete tasks.');
+      }
+
+      const now = new Date();
+      const batch = db.batch();
+      const deletedIds = [];
+      const failed = [];
+
+      for (const id of wanted) {
+        const docRef = db.collection('tasks').doc(id);
+        const snap = await docRef.get();
+        if (!snap.exists) { failed.push({ id, reason: 'Task no longer exists.' }); continue; }
+        const task = snap.data();
+        if (!tmCanDelete_(access, task)) {
+          failed.push({ id, reason: String(task.AssignedTo) === access.code ? 'You cannot delete tasks assigned to yourself.' : 'Only a Nazim (for employee tasks) or administrator can delete this task.' });
+          continue;
+        }
+        batch.delete(docRef);
+        batch.set(db.collection('taskHistory').doc(), {
+          Timestamp: now,
+          TaskID: id,
+          ActorEmpCode: user.EmpCode,
+          ActorName: user.EmpName,
+          Action: 'TASK_DELETED',
+          Details: JSON.stringify({ title: tmSafeTaskTitleForEmail_(task), assignedTo: task.AssignedTo }),
+          WatcherCodes: task.WatcherCodes || [task.AssignedTo, task.AssignedBy]
+        });
+        deletedIds.push(id);
+      }
+
+      if (!deletedIds.length) {
+        throw new Error(failed[0] ? failed[0].reason : 'No selected tasks could be deleted.');
+      }
+
+      await batch.commit();
+      deletedIds.forEach(id => removeTaskFromCache_(id));
+      await tmAudit_(user.EmpCode, 'TASKS_BULK_DELETED', 'tasks', { count: deletedIds.length });
+
+      return {
+        ok: true,
+        count: deletedIds.length,
+        deleted: deletedIds.length,
+        deletedIds,
+        failed,
+        message: `${deletedIds.length} task(s) deleted.` + (failed.length ? ` ${failed.length} protected task(s) skipped.` : '')
+      };
+    },
+
     // 8. Compulsory Task Receipt Confirmation
     apiAcknowledgeTasks: async function (token, taskIds) {
       const { user } = await tmAuth_(token);
@@ -3360,6 +3415,46 @@
       memoClear();
       await tmAudit_(user.EmpCode, isNew ? 'PERSON_ADD' : 'PERSON_UPDATE', code, {});
       return { ok: true, created: isNew };
+    },
+
+    apiDeletePerson: async function (token, empCode) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+
+      const code = tmClip_(empCode, 30).toUpperCase();
+      if (!code) throw new Error('Employee code is required.');
+      if (code === String(user.EmpCode).toUpperCase()) throw new Error('You cannot delete your own account.');
+      if (code === 'ADMIN') throw new Error('The primary ADMIN account cannot be deleted.');
+
+      const hier = await tmHierarchy_();
+      const target = hier.byCode[code];
+      if (!target) throw new Error('Employee not found.');
+
+      const reports = Object.values(hier.byCode).filter(e => String(e.Nazim || '').toUpperCase() === code);
+      if (reports.length) {
+        throw new Error(`This person still has ${reports.length} assigned report(s). Reassign their Nazim first.`);
+      }
+
+      const taskSnap = await db.collection('tasks').where('AssignedTo', '==', code).get();
+      let openCount = 0;
+      taskSnap.forEach(d => { if (String((d.data() || {}).Status || 'Pending') !== 'Completed') openCount++; });
+      if (openCount > 0) {
+        throw new Error(`This person still has ${openCount} open task(s). Reassign, complete, or delete their open tasks first.`);
+      }
+
+      const batch = db.batch();
+      batch.delete(db.collection('employees').doc(code));
+      batch.delete(db.collection('authLookup').doc(code));
+      batch.delete(db.collection('userKeys').doc(code));
+      if (target.AuthUid) {
+        batch.delete(db.collection('users').doc(target.AuthUid));
+      }
+      await batch.commit();
+
+      memoClear();
+      await tmAudit_(user.EmpCode, 'PERSON_DELETE', code, { name: target.EmpName });
+      return { ok: true, EmpCode: code, message: `${target.EmpName} (${code}) removed.` };
     },
 
     apiSendPasswordReset: async function (token, empCode) {
