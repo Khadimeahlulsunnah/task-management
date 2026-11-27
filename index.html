@@ -523,6 +523,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .pri-Low{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
 
 .pri-seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pri-seg.is-2{grid-template-columns:repeat(2,1fr)}
 .pri-btn{min-height:36px;padding:4px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--surface);font-size:.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:all .15s}
 .pri-btn:hover:not(:disabled){border-color:var(--brand);background:var(--hover)}
 .pri-btn[aria-pressed=true]{border-color:var(--brand);background:var(--brand-s);color:var(--brand-d);box-shadow:0 0 0 1px var(--brand)}
@@ -650,11 +651,12 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   
   /* Task Rows & Filters */
   .row { flex-wrap: wrap !important; padding: 10px 12px !important; gap: 8px 10px !important; }
-  .side { width: 100% !important; justify-content: space-between !important; padding-left: 36px !important; margin-top: 2px !important; }
+  .row > .rmain { flex: 1 1 calc(100% - 50px) !important; min-width: 0 !important; }
+  .row > .side { flex: 1 1 auto !important; width: auto !important; justify-content: flex-start !important; gap: 10px !important; padding-left: 36px !important; margin-top: 2px !important; }
   .due { text-align: left !important; min-width: auto !important; }
   .filters .search { flex-basis: 100% !important; width: 100% !important; }
   .filters input[data-k="employee"] { flex: 1 1 100% !important; width: 100% !important; }
-  .filters select { flex: 1 1 calc(50% - 6px) !important; min-width: 110px !important; }
+  .filters select,.filters .tm-dd { flex: 1 1 calc(50% - 6px) !important; min-width: 110px !important; }
   
   /* Task Insertion Popup Modal on Mobile */
   .task-modal-overlay {
@@ -739,6 +741,28 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .ack-card-desc{font-size:.88rem;color:var(--muted);white-space:pre-wrap;margin:0;line-height:1.45}
 .ack-card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:4px}
 .ack-foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--surface)}
+
+/* Custom Crafted Dropdowns */
+.tm-dd{position:relative;display:inline-flex;align-items:stretch;min-width:0;max-width:100%}
+.field .tm-dd,.nx-filters .tm-dd,td .tm-dd{width:100%;display:flex}
+.tm-dd-native{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important}
+.tm-dd-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:38px;padding:0 11px;border:1px solid var(--line2);border-radius:var(--r);background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;font-weight:500;text-align:left;cursor:pointer;transition:border-color .15s,background-color .15s,box-shadow .15s;min-width:0}
+.field .tm-dd-btn{min-height:40px}
+.bulkbar .tm-dd-btn,td .tm-dd-btn{min-height:34px;font-size:.86rem;padding:0 10px}
+.tm-dd-btn:hover:not(:disabled){border-color:var(--brand);background:var(--hover)}
+.tm-dd-btn[aria-expanded=true]{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-s)}
+.tm-dd-btn:disabled{opacity:.5;cursor:not-allowed;background:var(--soft)}
+.tm-dd-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.tm-dd-lbl.is-ph{color:var(--muted)}
+.tm-dd-chev{width:15px;height:15px;flex:none;color:var(--muted);transition:transform .16s ease}
+.tm-dd-btn[aria-expanded=true] .tm-dd-chev{transform:rotate(180deg);color:var(--brand)}
+.tm-dd-menu{position:fixed;z-index:98;background:var(--surface);border:1px solid var(--line2);border-radius:13px;box-shadow:var(--shadow);padding:5px;max-height:min(290px,46vh);overflow-y:auto;display:grid;gap:2px;overscroll-behavior:contain}
+.tm-dd-opt{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ink);font:inherit;font-size:.88rem;font-weight:500;text-align:left;cursor:pointer;transition:background-color .12s,color .12s}
+.tm-dd-opt:hover:not(:disabled),.tm-dd-opt.is-hi:not(:disabled){background:var(--hover)}
+.tm-dd-opt[aria-selected=true]{background:var(--brand-s);color:var(--brand-d);font-weight:700}
+.tm-dd-opt:disabled{opacity:.42;cursor:not-allowed}
+.tm-dd-chk{width:14px;height:14px;flex:none;color:var(--brand)}
+.ic-inline{width:14px;height:14px;display:inline-block;vertical-align:-2px;flex:none}
 </style>
 <!-- Firebase SDKs (Compat v10 for direct browser usage without build tools) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -758,6 +782,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 <div id="toasts" role="status" aria-live="polite"></div>
 <div id="ack-root"></div>
 <div id="cmd-root"></div>
+<div id="tm-dd-portal" class="tm-dd-menu" role="listbox" hidden></div>
 <script>
 (function () {
 'use strict';
@@ -773,7 +798,119 @@ const h = (st, ...v) => new Raw(st.reduce((o, s, i) => o + s + (i < v.length ? p
 const mount = (el, r) => {
   if (r instanceof Raw) el.innerHTML = r.s;
   else el.textContent = String(r == null ? '' : r);
+  enhanceSelects(el);
 };
+
+/* ================= custom dropdowns ================= */
+let DD_OPEN = null; // { sel, btn, hiIdx, opts }
+function ddPortal() { return $('#tm-dd-portal'); }
+function closeCustomSelect() {
+  const p = ddPortal();
+  if (p) { p.hidden = true; p.innerHTML = ''; }
+  if (DD_OPEN && DD_OPEN.btn) DD_OPEN.btn.setAttribute('aria-expanded', 'false');
+  DD_OPEN = null;
+}
+function syncCustomSelect(sel) {
+  if (!sel || !sel._ddBtn) return;
+  const wrap = sel._ddWrap, btn = sel._ddBtn, lbl = $('.tm-dd-lbl', btn);
+  if (wrap) wrap.hidden = !!sel.hidden;
+  btn.disabled = !!sel.disabled;
+  const opt = sel.options[sel.selectedIndex] || sel.options[0];
+  const txt = opt ? opt.textContent : '';
+  lbl.textContent = txt || 'Select…';
+  lbl.classList.toggle('is-ph', !sel.value);
+}
+function paintCustomSelectMenu() {
+  const p = ddPortal();
+  if (!DD_OPEN || !p) return;
+  const { sel, hiIdx } = DD_OPEN;
+  const opts = Array.from(sel.options);
+  DD_OPEN.opts = opts;
+  p.innerHTML = '';
+  opts.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tm-dd-opt' + (i === hiIdx ? ' is-hi' : '');
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(i === sel.selectedIndex));
+    b.disabled = !!o.disabled;
+    const sp = document.createElement('span');
+    sp.textContent = o.textContent;
+    b.appendChild(sp);
+    if (i === sel.selectedIndex) {
+      b.insertAdjacentHTML('beforeend', '<svg class="tm-dd-chk" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>');
+    }
+    b.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (o.disabled) return;
+      sel.selectedIndex = i;
+      sel.value = o.value;
+      syncCustomSelect(sel);
+      closeCustomSelect();
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    p.appendChild(b);
+  });
+  const activeEl = p.children[hiIdx >= 0 ? hiIdx : sel.selectedIndex];
+  if (activeEl && activeEl.scrollIntoView) activeEl.scrollIntoView({ block: 'nearest' });
+}
+function openCustomSelect(sel, btn) {
+  if (!sel || sel.disabled) return;
+  if (DD_OPEN && DD_OPEN.sel === sel) { closeCustomSelect(); return; }
+  closeCustomSelect();
+  const p = ddPortal(); if (!p) return;
+  DD_OPEN = { sel, btn, hiIdx: Math.max(0, sel.selectedIndex), opts: [] };
+  btn.setAttribute('aria-expanded', 'true');
+  p.hidden = false;
+  paintCustomSelectMenu();
+  const r = btn.getBoundingClientRect();
+  const w = Math.max(r.width, 160);
+  p.style.width = Math.min(w, window.innerWidth - 16) + 'px';
+  p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - Math.min(w, window.innerWidth - 16) - 8)) + 'px';
+  const mh = p.offsetHeight || 220;
+  const spaceBelow = window.innerHeight - r.bottom - 10;
+  const top = (spaceBelow >= Math.min(mh, 150) || spaceBelow >= r.top) ? Math.min(r.bottom + 5, window.innerHeight - mh - 8) : Math.max(8, r.top - mh - 5);
+  p.style.top = top + 'px';
+}
+function enhanceSelects(root) {
+  const scope = root || document;
+  const list = scope.tagName === 'SELECT' ? [scope] : Array.from(scope.querySelectorAll('select'));
+  list.forEach(sel => {
+    if (sel.dataset.ddDone) { syncCustomSelect(sel); return; }
+    sel.dataset.ddDone = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'tm-dd';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('tm-dd-native');
+    sel.tabIndex = -1;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tm-dd-btn';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<span class="tm-dd-lbl"></span><svg class="tm-dd-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>';
+    wrap.appendChild(btn);
+    sel._ddWrap = wrap;
+    sel._ddBtn = btn;
+
+    btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openCustomSelect(sel, btn); });
+    btn.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (!DD_OPEN || DD_OPEN.sel !== sel) openCustomSelect(sel, btn);
+      }
+    });
+    sel.addEventListener('change', () => syncCustomSelect(sel));
+    if (typeof MutationObserver !== 'undefined') {
+      const mo = new MutationObserver(() => syncCustomSelect(sel));
+      mo.observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden'] });
+    }
+    syncCustomSelect(sel);
+  });
+}
 const mem = {};
 const store = {
   get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return mem[k] || ''; } },
@@ -811,7 +948,7 @@ const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
 const priBadge = p => {
   const pr = p || 'Normal';
-  const icon = pr === 'Urgent' ? '🔴 ' : pr === 'High' ? '🟠 ' : pr === 'Low' ? '⚪ ' : '';
+  const icon = pr === 'Urgent' ? '🔴 ' : pr === 'High' ? '🟠 ' : '';
   return h`<span class="pri pri-${pr}">${icon}${pr}</span>`;
 };
 
@@ -900,7 +1037,7 @@ function showLogin(msg) {
   mount($('#root'), h`<main class="login"><div class="login-card">
     <h1>${(S.appName || 'Task Management')}</h1><p class="muted">Sign in with your email or employee code.</p>
     ${needsConfig ? h`<div class="notice warn" style="margin:14px 0;text-align:left;font-size:0.9rem">
-      <strong>⚠️ Firebase Setup Required:</strong><br>
+      <strong>Firebase Setup Required:</strong><br>
       Please open <code>firebase-config.js</code> and paste your Firebase project credentials.<br>
       <small style="display:inline-block;margin-top:4px">Initial Administrator login will be <b>ADMIN</b> / <b>admin123</b> once linked. See <code>README.md</code> for a simple 3-minute beginner guide.</small>
     </div>` : ''}
@@ -950,7 +1087,7 @@ function renderAckGate() {
       </div>
       <div class="ack-list">
         ${hasLocked ? h`<div class="notice warn" style="margin:0">
-          <b>🔒 Encrypted Task Details Locked</b><br>
+          <b>Encrypted Task Details Locked</b><br>
           <small>Enter your password once on this device to unlock — it will stay unlocked automatically while you remain signed in.</small>
           <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
@@ -960,9 +1097,9 @@ function renderAckGate() {
         ${list.map(t => h`<div class="ack-card">
           <div class="ack-card-top">
             <span class="task-origin">${taskOrigin(t)}</span>
-            <span class="due" style="${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${t.Overdue ? '🚨 ' : ''}${dueText(t)}</span>
+            <span class="due" style="${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${dueText(t)}</span>
           </div>
-          <div class="ack-card-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+          <div class="ack-card-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
           ${t.Description ? h`<p class="ack-card-desc">${t.Description}</p>` : ''}
           <div class="ack-card-foot">
             <small class="muted">Task ID: ${t.TaskID}</small>
@@ -1001,7 +1138,8 @@ const IC = {
   dashboard: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>`,
   team: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5M16 5.2a3 3 0 010 5.6M18 14.3c1.8.6 2.7 2 3 4.7"/></svg>`,
   mail: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 8l8 6 8-6"/></svg>`,
-  admin: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg>`
+  admin: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg>`,
+  lock: h`<svg class="ic-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>`
 };
 function renderApp() {
   const b = S.boot, u = b.user, mgr = u.isNazim || u.isAdmin, teamMgr = !!u.hasTeam || mgr;
@@ -1010,7 +1148,7 @@ function renderApp() {
       <header class="top">
         <div class="brand">${b.app.name}</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <button type="button" class="top-cmd" data-act="opencmd" title="Quick jump (Ctrl+K)" aria-label="Quick jump">⌘</button>
+          <button type="button" class="top-cmd" data-act="opencmd" title="Quick jump (Ctrl+K)" aria-label="Quick jump">/</button>
           <button class="avatar" data-act="profile" title="${u.EmpName}" aria-label="My profile">${initials(u.EmpName)}</button>
         </div>
       </header>
@@ -1131,7 +1269,7 @@ function renderDashboardShell() {
         <div class="nx-controls">
           <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filters ▾'}${activeCount ? h` <span class="nx-tab-cnt">${activeCount}</span>` : ''}</button>
           ${activeCount ? h`<button type="button" class="btn sm danger" data-act="dashreset">Clear</button>` : ''}
-          <button type="button" class="btn sm" data-act="printdash" title="Print or save Dashboard as PDF">🖨 Print</button>
+          <button type="button" class="btn sm" data-act="printdash" title="Print or save Dashboard as PDF">Print</button>
           <button type="button" class="btn sm primary" data-act="refreshdashboard" data-busy="Updating">Refresh</button>
         </div>
       </div>
@@ -1392,14 +1530,14 @@ function paintDashboardOverview(box, d) {
         </div>
         ${alerts.length ? h`<div class="nx-mini-list">${alerts.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">Assigned to <b>${t.AssignedToName}</b> · Due ${t.Due ? fmtDate(t.Due) : '—'}</div>
           </div>
           <span class="nx-pill rose">${t.DaysLate}d late</span>
         </button>`)}</div>`
         : unconfirmed.length ? h`<div class="nx-mini-list">${unconfirmed.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">Waiting on <b>${t.AssignedToName}</b> to confirm</div>
           </div>
           <span class="nx-pill amber">Waiting confirm</span>
@@ -1547,7 +1685,7 @@ function paintDashboardDeadlines(box, d) {
         <div class="nx-card-head"><div><h3>Late Tasks (Most Urgent)</h3><small>Tasks already past their due date</small></div><button type="button" class="btn sm ghost" data-act="dashkpi" data-status="Overdue">See all ${c.Overdue || 0} →</button></div>
         ${overdueList.length ? h`<div class="nx-mini-list">${overdueList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">${t.AssignedToName} · Due ${t.Due ? fmtDate(t.Due) : '—'} · ${t.Status}</div>
           </div>
           <span class="nx-pill rose">${t.DaysLate}d late</span>
@@ -1558,7 +1696,7 @@ function paintDashboardDeadlines(box, d) {
         <div class="nx-card-head"><div><h3>Due Today</h3><small>Tasks scheduled to finish today</small></div><span class="nx-pill amber">${(d.due && d.due['Due today']) || 0} today</span></div>
         ${todayList.length ? h`<div class="nx-mini-list">${todayList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">${t.AssignedToName} · ${t.NeedsAck ? 'Waiting confirmation' : t.Status}</div>
           </div>
           <span class="nx-pill sky">Due Today</span>
@@ -1703,7 +1841,7 @@ function renderCalendarWidget(opt) {
         ${overCount ? h`<span class="cal-badge over num">${overCount} late</span>` : openCount ? h`<span class="cal-badge open num">${openCount}</span>` : doneCount ? h`<span class="cal-badge done num">✓ ${doneCount}</span>` : ''}
       </div>
       ${list.length ? h`<div class="cal-pills">
-        ${list.slice(0, 3).map(t => h`<button type="button" class="cal-pill ${pillCls(t)}" data-act="open" data-id="${t.TaskID}" title="${t.Title}${t.AssignedToName ? ' · ' + t.AssignedToName : ''}">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</button>`)}
+        ${list.slice(0, 3).map(t => h`<button type="button" class="cal-pill ${pillCls(t)}" data-act="open" data-id="${t.TaskID}" title="${t.Title}${t.AssignedToName ? ' · ' + t.AssignedToName : ''}">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</button>`)}
         ${(totalCount > 3 || list.length > 3) ? h`<span class="cal-more">+${Math.max(totalCount, list.length) - 3} more</span>` : ''}
       </div>` : ''}
       ${totalCount ? h`<div class="cal-dots">
@@ -1755,10 +1893,10 @@ function renderCalendarWidget(opt) {
       </div>
       ${dayTasks.length ? (opt.scope ? h`<div class="list">${dayTasks.map(t => taskRow(t, opt.scope))}</div>` : h`<div style="display:grid;gap:8px">${dayTasks.map(t => h`<button type="button" class="nx-task-row" data-act="open" data-id="${t.TaskID}">
         <div class="nx-mini-main">
-          <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+          <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
           <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
             <span class="task-origin">${taskOrigin(t)}</span>
-            <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
+            <span>${t.AssignedToName} (${t.AssignedTo})</span>
             <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
           </div>
         </div>
@@ -1847,11 +1985,11 @@ function paintDashboardTasks(box, d) {
 
     ${visibleRows.length ? h`<div style="display:grid;gap:8px">${visibleRows.map(t => h`<button type="button" class="nx-task-row" data-act="open" data-id="${t.TaskID}">
       <div class="nx-mini-main">
-        <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+        <div class="nx-mini-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
         <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
           ${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : ''}
           <span class="task-origin">${taskOrigin(t)}</span>
-          <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
+          <span>${t.AssignedToName} (${t.AssignedTo})</span>
           <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
           <span style="${t.Overdue ? 'color:var(--nx-rose);font-weight:700' : ''}">${t.Due ? (t.Overdue ? 'Late · Due ' : 'Due ') + fmtDate(t.Due) : 'No due date'}</span>
         </div>
@@ -2135,9 +2273,9 @@ function renderTasksShell(scope) {
       <select data-ch="filter" data-k="division" id="flt-division" aria-label="Division">${opt(divOpts, f.division, 'All divisions')}</select>
       <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles || [], f.role, 'All roles')}</select>`}
       <div class="view-seg" role="group" aria-label="Task view mode">
-        <button type="button" data-act="taskview" data-m="list" aria-pressed="${mode === 'list'}">☰ List</button>
-        <button type="button" data-act="taskview" data-m="board" aria-pressed="${mode === 'board'}">📊 Board</button>
-        <button type="button" data-act="taskview" data-m="calendar" aria-pressed="${mode === 'calendar'}">📅 Calendar</button>
+        <button type="button" data-act="taskview" data-m="list" aria-pressed="${mode === 'list'}">List</button>
+        <button type="button" data-act="taskview" data-m="board" aria-pressed="${mode === 'board'}">Board</button>
+        <button type="button" data-act="taskview" data-m="calendar" aria-pressed="${mode === 'calendar'}">Calendar</button>
       </div>
       <button type="button" class="btn sm" data-act="refreshlist" data-busy="Refreshing" title="Fetch latest tasks from server">↻ Refresh</button>
     </div>
@@ -2181,10 +2319,10 @@ function taskRow(t, scope) {
   const loc = [t.Region, t.State, t.Division].filter(Boolean).join(' / ');
   const who = scope === 'team' ? h`<span>${t.AssignedToName}</span><span>${loc}</span>` : h`<span>From ${t.AssignedByName}</span>`;
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
-    <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
-    <div class="rmain"><div class="title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div><div class="meta">${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : ''}<span class="task-origin">${taskOrigin(t)}</span>${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
-    <div class="side"><span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
+    <div class="rmain"><div class="title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div><div class="meta">${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : ''}<span class="task-origin">${taskOrigin(t)}</span>${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
+    <div class="side"><span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div>
+    <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}></article>`;
 }
 function renderKanbanBoard(scope, d) {
   const cols = [
@@ -2222,14 +2360,16 @@ function renderKanbanBoard(scope, d) {
           return h`<article class="kb-card ${cls}" data-act="open" data-id="${t.TaskID}" draggable="${t.CanUpdate ? 'true' : 'false'}" tabindex="0">
             <div class="kb-card-top">
               <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
                 ${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : h`<span class="muted" style="font-size:.72rem">${t.TaskID}</span>`}
               </div>
-              <span class="due" style="font-size:.76rem;min-width:0;${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${dueText(t)}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="due" style="font-size:.76rem;min-width:0;${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${dueText(t)}</span>
+                <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
+              </div>
             </div>
-            <div class="kb-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="kb-title">${t.DecryptLocked ? IC.lock : ''}${t.DecryptLocked ? ' ' : ''}${t.Title}</div>
             <div class="kb-meta">
-              <span>${scope === 'team' ? '👤 ' + t.AssignedToName : taskOrigin(t)}</span>
+              <span>${scope === 'team' ? t.AssignedToName : taskOrigin(t)}</span>
               ${scope === 'team' && t.Division ? h`<span>${t.Division}</span>` : ''}
             </div>
             <div class="kb-foot">
@@ -2290,12 +2430,15 @@ function renderBulkBar(scope) {
   const u = S.boot && S.boot.user || {};
   const canReassign = !!(u.isNazim || u.isAdmin);
   const assignable = canReassign ? (S.boot.people || []).filter(p => p.a) : [];
+  const selectedTasks = Array.from(selected).map(id => findTask(id)).filter(Boolean);
+  const canBulkDelete = (u.isAdmin || u.isNazim) && selectedTasks.some(t => t.CanDelete);
   mount(box, h`<div class="bulkbar" role="region" aria-label="Bulk task actions">
     <b>${count} selected</b>
     <button class="btn sm" data-act="selectvisible" data-scope="${scope}">Select this page</button>
     <select id="bulk-status" aria-label="Set status"><option value="">Change status to…</option>${S.boot.lists.statuses.map(x => h`<option>${x}</option>`)}</select>
     <button class="btn primary sm" data-act="applybulk" data-scope="${scope}" data-busy="Updating">Apply</button>
     ${canReassign && assignable.length ? h`<select id="bulk-assignee" aria-label="Reassign to employee"><option value="">Reassign to…</option>${assignable.map(p => h`<option value="${p.c}">${p.n} (${p.c})</option>`)}</select><button class="btn sm" data-act="applybulkreassign" data-scope="${scope}" data-busy="Moving">Reassign</button>` : ''}
+    ${canBulkDelete ? h`<button class="btn danger sm" data-act="applybulkdelete" data-scope="${scope}" data-busy="Deleting">Delete selected</button>` : ''}
     <button class="btn sm" data-act="clearselection" data-scope="${scope}">Clear</button>
     <small class="muted">Applies to selected loaded tasks.</small>
   </div>`);
@@ -2527,7 +2670,7 @@ function pickerShow(box) {
 function openTask(id) {
   const t = findTask(id); if (!t) return;
   S.openId = id; S.openTask = t;
-  openDrawer(dheadH((t.DecryptLocked ? '🔒 ' : '') + t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
+  openDrawer(dheadH(t.DecryptLocked ? h`${IC.lock} ${t.Title}` : t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
   paintStatus(t); loadTaskHistory(id);
 }
 function taskOrigin(t) { return t.SelfAssigned ? 'Self task' : t.GivenByNazim ? 'Given by Nazim ' + t.AssignedByName : 'Given by ' + t.AssignedByName; }
@@ -2574,7 +2717,7 @@ async function reopenTask(form, btn) {
 function taskBodyH(t) {
   return h`<div class="sec" id="d-status"></div>
     ${t.IsConfidential && t.DecryptLocked ? h`<div class="notice warn" style="margin-bottom:12px">
-      <b>🔒 Encrypted Task Locked</b><br><small>Enter your password once on this device to unlock — it stays unlocked automatically while you stay signed in.</small>
+      <b>Encrypted Task Locked</b><br><small>Enter your password once on this device to unlock — it stays unlocked automatically while you stay signed in.</small>
       <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
         <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
@@ -2588,7 +2731,7 @@ function taskBodyH(t) {
       <dt>Due</dt><dd>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="${t.Overdue ? 'over-txt' : ''}" id="d-due" style="${t.Overdue ? 'color:var(--bad);font-weight:600' : ''}">${t.Due ? fmtDate(t.Due) + ' · ' + dueText(t) : 'No due date'}</span>
-          ${t.CanManage ? h`<button type="button" class="btn sm ghost" data-act="toggleeditdue" style="padding:1px 8px;height:24px;font-size:.76rem;border:1px solid var(--line2)">✏️ Edit date</button>` : ''}
+          ${t.CanManage ? h`<button type="button" class="btn sm ghost" data-act="toggleeditdue" style="padding:1px 8px;height:24px;font-size:.76rem;border:1px solid var(--line2)">Edit date</button>` : ''}
         </div>
         ${t.CanManage ? h`
           <div id="d-due-edit-box" hidden style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -2634,11 +2777,12 @@ function editTask(t) {
   const people = (S.boot.people || []).filter(p => p.a);
   const me = S.boot.user, allowHigh = !!(me.isNazim || me.isAdmin) && !t.SelfAssigned && t.AssignedTo !== me.EmpCode;
   const curP = t.Priority || 'Normal';
+  const prioOpts = (allowHigh || curP === 'Urgent' || curP === 'High') ? ['Urgent', 'High', 'Normal', 'Low'] : ['Normal', 'Low'];
   openDrawer(dheadH('Edit task', t.TaskID), h`<form id="editForm" data-form="savetask" data-id="${t.TaskID}">
     <label class="field"><span>Title</span><input id="e-title" maxlength="200" value="${t.Title}" required autofocus></label>
     <label class="field"><span>Description</span><textarea id="e-desc" maxlength="2000">${t.Description}</textarea></label>
     <div class="two"><label class="field"><span>Due date</span><input id="e-due" type="date" value="${t.Due}" required></label>
-    <label class="field"><span>Priority</span><select id="e-prio">${['Urgent', 'High', 'Normal', 'Low'].map(p => h`<option value="${p}" ${curP === p ? 'selected' : ''} ${!allowHigh && (p === 'Urgent' || p === 'High') ? 'disabled' : ''}>${p}</option>`)}</select></label></div>
+    <label class="field"><span>Priority</span><select id="e-prio">${prioOpts.map(p => h`<option value="${p}" ${curP === p ? 'selected' : ''}>${p === 'Urgent' ? '🔴 Urgent' : p === 'High' ? '🟠 High' : p}</option>`)}</select></label></div>
     <div class="field"><span>Assigned to</span>${pickerH('edit', people, t.AssignedTo)}</div>
     <div id="e-err" class="notice bad" hidden></div></form>`,
     h`<button class="btn" data-act="canceledit" data-id="${t.TaskID}">Cancel</button><button class="btn primary" data-act="submitform" data-f="editForm" data-busy="Saving">Save changes</button>`);
@@ -2678,8 +2822,8 @@ function newTask(presetDue) {
         <span style="font-weight:700;font-size:.9rem">Assign to</span>
         ${canAssignOthers ? h`
           <div class="task-mode-toggle" role="group" aria-label="Assignment mode" style="margin:0">
-            <button type="button" class="mode-btn" data-act="settargetmode" data-m="self" aria-pressed="true" style="min-height:34px;padding:4px 12px;font-size:.84rem">👤 Myself</button>
-            <button type="button" class="mode-btn" data-act="settargetmode" data-m="team" aria-pressed="false" style="min-height:34px;padding:4px 12px;font-size:.84rem">👥 Team</button>
+            <button type="button" class="mode-btn" data-act="settargetmode" data-m="self" aria-pressed="true" style="min-height:34px;padding:4px 12px;font-size:.84rem">Myself</button>
+            <button type="button" class="mode-btn" data-act="settargetmode" data-m="team" aria-pressed="false" style="min-height:34px;padding:4px 12px;font-size:.84rem">Team</button>
           </div>` : ''}
       </div>
 
@@ -2711,20 +2855,17 @@ function newTask(presetDue) {
 
     <!-- TASK TITLE(S) -->
     <div class="field" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <label for="n-taskTitle" style="font-weight:700;font-size:.9rem;cursor:pointer">Task Title</label>
-        <button type="button" class="btn sm ghost" data-act="addtasktitle" title="Add multiple tasks in one batch" style="height:26px;font-size:.78rem;padding:2px 8px">+ Add multiple</button>
-      </div>
+      <label for="n-taskTitle" style="font-weight:700;font-size:.9rem;cursor:pointer;display:block;margin-bottom:6px">Task Title</label>
       <div id="n-task-queue" class="task-titles-queue" hidden></div>
       <div class="inline-add">
-        <input id="n-taskTitle" maxlength="200" placeholder="What needs to be done?" aria-label="Task title" autofocus autocomplete="off" style="font-size:.95rem">
+        <input id="n-taskTitle" maxlength="200" placeholder="What needs to be done? (Press Enter to queue multiple)" aria-label="Task title" autofocus autocomplete="off" style="font-size:.95rem">
       </div>
     </div>
 
     <!-- READY-MADE TEMPLATES -->
     <div class="field" id="n-tpl-field" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-weight:700;font-size:.9rem">✨ Ready-Made Templates</span>
+        <span style="font-weight:700;font-size:.9rem">Ready-Made Templates</span>
         <span id="n-tpl-count" class="badge b-PASS" style="font-size:.75rem"></span>
       </div>
       <input id="n-tpl-search" type="search" placeholder="Search templates…" aria-label="Search templates" style="margin-bottom:6px;width:100%" maxlength="100">
@@ -2916,17 +3057,24 @@ function syncPriorityUi() {
   const allowHigh = canAssignOthers && !includesSelf && targets.length > 0;
   if (!allowHigh && (S.draft.priority === 'Urgent' || S.draft.priority === 'High')) S.draft.priority = 'Normal';
   const cur = S.draft.priority || 'Normal';
+  seg.classList.toggle('is-2', !allowHigh);
   $$('.pri-btn', seg).forEach(b => {
     const p = b.dataset.p;
-    b.disabled = !allowHigh && (p === 'Urgent' || p === 'High');
+    const hideBtn = !allowHigh && (p === 'Urgent' || p === 'High');
+    b.hidden = hideBtn;
+    b.disabled = hideBtn;
     b.setAttribute('aria-pressed', String(p === cur));
   });
   const hint = $('#n-prio-hint');
   if (hint) {
     const lim = (S.boot.app && S.boot.app.priorityLimits) || { Urgent: 3, High: 5, Normal: 25, Low: 20 };
-    if (!canAssignOthers) hint.textContent = 'Self-tasks can be Normal or Low. Urgent & High are reserved for Nazim/Admin assignments.';
-    else if (includesSelf) hint.textContent = 'Self-tasks cannot be Urgent or High. Switch to Team (without Include myself) to set Urgent/High.';
-    else hint.textContent = `Limits per employee: Urgent ${lim.Urgent} · High ${lim.High} · Normal ${lim.Normal || '∞'} · Low ${lim.Low || '∞'} active tasks.`;
+    if (!allowHigh) {
+      hint.hidden = !canAssignOthers;
+      hint.textContent = canAssignOthers ? 'Self-tasks use Normal or Low priority.' : '';
+    } else {
+      hint.hidden = false;
+      hint.textContent = `Limits per employee: Urgent ${lim.Urgent} · High ${lim.High} · Normal ${lim.Normal || '∞'} · Low ${lim.Low || '∞'} active tasks.`;
+    }
   }
 }
 
@@ -2962,7 +3110,6 @@ function paintDraftPreview() {
   mount(box, h`
     ${totalTasks === 0 ? h`
       <div class="empty" style="padding:20px 14px;text-align:center">
-        <div style="font-size:1.4rem;margin-bottom:4px">📝</div>
         <b style="color:var(--ink)">${S.draft.targetMode === 'team' && !employeeTargets.length ? 'Select employees above' : 'No tasks queued yet'}</b>
         <p class="muted" style="margin:2px 0 0;font-size:.82rem">${S.draft.targetMode === 'team' && !employeeTargets.length ? 'Choose which team member(s) will receive this task.' : 'Type a task title above or select a ready-made template.'}</p>
       </div>` : ''}
@@ -2972,9 +3119,9 @@ function paintDraftPreview() {
         <div class="preview-task-main">
           <div class="preview-task-title">${m}</div>
           <div class="preview-task-tags">
-            <span class="preview-tag self">👤 You</span>
-            <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">📅 Due ${fmtDate(dueVal)}</span>
-            ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">📝 Notes</span>` : ''}
+            <span class="preview-tag self">You</span>
+            <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">Due ${fmtDate(dueVal)}</span>
+            ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">Notes</span>` : ''}
           </div>
         </div>
         <button type="button" class="btn ghost sm" style="padding:2px 8px;color:var(--muted)" data-act="rmtasktitlebyname" data-t="${m}" title="Remove task">✕</button>
@@ -2986,9 +3133,9 @@ function paintDraftPreview() {
         <div class="preview-task-main">
           <div class="preview-task-title">${m}</div>
           <div class="preview-task-tags">
-            <span class="preview-tag team">👥 ${emp.n}</span>
-            <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">📅 Due ${fmtDate(dueVal)}</span>
-            ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">📝 Notes</span>` : ''}
+            <span class="preview-tag team">${emp.n}</span>
+            <span class="preview-tag" style="background:var(--soft);color:var(--brand);font-weight:600">Due ${fmtDate(dueVal)}</span>
+            ${$('#n-desc')?.value.trim() ? h`<span class="preview-tag" style="background:var(--soft);color:var(--muted)">Notes</span>` : ''}
           </div>
         </div>
         <button type="button" class="btn ghost sm" style="padding:2px 8px;color:var(--muted)" data-act="rmtasktitlebyname" data-t="${m}" title="Remove task title">✕</button>
@@ -3001,12 +3148,12 @@ function paintDraftPreview() {
       const targetNames = g.targets.map(p => p.c === me.EmpCode ? 'You' : p.n).join(', ');
       return h`<div class="template-preview-card">
         <div class="tpl-card-top">
-          <span class="tpl-badge">✨ Template Task</span>
+          <span class="tpl-badge">Template Task</span>
           <span class="tpl-recipients-pill">For: <b>${targetNames}</b> (${g.targets.length} ${g.targets.length === 1 ? 'person' : 'people'})</span>
         </div>
         <div class="tpl-card-title">${t.title}</div>
         <div style="font-size:.8rem;color:var(--muted);display:flex;gap:8px;align-items:center;margin-top:2px">
-          <span style="font-weight:600;color:var(--brand)">📅 Due ${fmtDate(dueVal)}</span>
+          <span style="font-weight:600;color:var(--brand)">Due ${fmtDate(dueVal)}</span>
         </div>
         ${t.description ? h`<div class="tpl-card-desc">${t.description}</div>` : ''}
         <button type="button" class="btn ghost sm tpl-rm-btn" data-act="rmtpl" data-role="${g.role}" data-id="${g.id}" title="Remove template">✕</button>
@@ -3227,12 +3374,28 @@ async function applyBulkReassign(scope, btn) {
     } catch (e) { if (!e.auth) toast(e.message, true); }
   });
 }
+async function applyBulkDelete(scope, btn) {
+  const ids = Array.from(S.selected[scope]);
+  if (!ids.length) return toast('Select at least one task.', true);
+  if (!window.confirm(`Delete ${ids.length} selected task(s)? This cannot be undone.`)) return;
+  await busy(btn, async () => {
+    try {
+      const r = await api('apiBulkDeleteTasks', S.token, ids);
+      S.selected[scope].clear();
+      const removed = Array.isArray(r.deletedIds) ? r.deletedIds : [];
+      removed.forEach(id => removeLocalTask(id));
+      if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+      toast(r.message || (removed.length + ' task(s) deleted.'));
+      if (r.failed && r.failed.length) console.warn('Bulk delete skipped items:', r.failed);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  });
+}
 /* ---- profile ---- */
 function openProfile() {
   const u = S.boot.user;
   const loc = ['India', u.Region, u.State, u.Division].filter(Boolean).join(' › ');
   openDrawer(dheadH(u.EmpName, u.EmpCode), h`<dl class="kv sec"><dt>Role</dt><dd>${u.Role}</dd><dt>App Role</dt><dd>${u.AppRole || 'User'}</dd><dt>Location</dt><dd>${loc}</dd><dt>Manager</dt><dd>${u.NazimName || '—'}</dd></dl>
-    <form class="sec" data-form="changepw"><h3>🔒 Change password</h3><p class="muted">Updating your password also re-secures your private encryption key.</p><label class="field"><span>Current password</span><input id="cp-cur" type="password" required autocomplete="current-password"></label><label class="field"><span>New password (min 8 chars)</span><input id="cp-new" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn sm primary" data-busy="Updating">Update password</button></form>
+    <form class="sec" data-form="changepw"><h3>Change password</h3><p class="muted">Updating your password also re-secures your private encryption key.</p><label class="field"><span>Current password</span><input id="cp-cur" type="password" required autocomplete="current-password"></label><label class="field"><span>New password (min 8 chars)</span><input id="cp-new" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn sm primary" data-busy="Updating">Update password</button></form>
     <div class="sec"><h3>Appearance</h3><div class="actions"><div class="seg" role="group" aria-label="Theme">${[['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(x => h`<button type="button" data-act="theme" data-v="${x[0]}" aria-pressed="${(store.get('tm.theme') || '') === x[0]}">${x[1]}</button>`)}</div><div class="seg" role="group" aria-label="Density">${[['', 'Comfortable'], ['compact', 'Compact']].map(x => h`<button type="button" data-act="density" data-v="${x[0]}" aria-pressed="${(store.get('tm.density') || '') === x[0]}">${x[1]}</button>`)}</div></div></div>
     <div class="sec"><h3>Sessions</h3><p class="muted">You stay signed in on this device for about ${S.boot.app.sessionDays} days.</p><div class="actions"><button class="btn" data-act="signout">Sign out</button><button class="btn danger" data-act="signoutall" data-busy="Working">Sign out on all devices</button></div></div>`);
 }
@@ -3315,17 +3478,19 @@ const getIndiaStates = () => (S.admin && S.admin.indiaStates) || (S.boot && S.bo
 async function adminPeople() {
   const r = await api('apiAdminPeople', S.token); if (!inAdmin('people')) return;
   S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.states = r.states || []; S.admin.divisions = r.divisions || []; S.admin.indiaStates = r.indiaStates || INDIA_STATES_ALL; S.admin.appRoles = r.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin']; S.admin.q = S.admin.q || '';
-  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><div class="actions"><button class="btn" data-act="goimport" data-kind="people">⬆ Import Excel</button><button class="btn primary" data-act="addperson">+ Add person</button></div></div>
-    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role / Scope</th><th>Location (Region › State › Division)</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
+  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><div class="actions"><button class="btn" data-act="goimport" data-kind="people">Import Excel</button><button class="btn primary" data-act="addperson">+ Add person</button></div></div>
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role / Scope</th><th>Location (Region › State › Division)</th><th>Manager</th><th>Status</th><th></th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
   paintPeople();
 }
 function paintPeople() {
   const q = (S.admin.q || '').toLowerCase(), by = {}; S.admin.people.forEach(p => { by[p.EmpCode] = p; });
+  const meCode = S.boot && S.boot.user ? S.boot.user.EmpCode : '';
   const rows = S.admin.people.filter(p => !q || (p.EmpName + ' ' + p.EmpCode + ' ' + p.Role + ' ' + (p.AppRole || '') + ' ' + p.Region + ' ' + (p.State || '') + ' ' + (p.Division || '')).toLowerCase().includes(q)).slice(0, 300);
   mount($('#ptbody'), rows.length ? h`${rows.map(p => {
     const loc = [p.Region, p.State, p.Division].filter(Boolean).join(' › ');
-    return h`<tr class="click" data-act="editperson" data-c="${p.EmpCode}" tabindex="0"><td><b>${p.EmpName}</b><br><small>${p.Email}</small></td><td>${p.EmpCode}</td><td><b>${p.Role}</b>${p.AppRole && p.AppRole !== 'User' ? h`<br><span class="task-origin">${p.AppRole}</span>` : ''}</td><td>${loc || '—'}</td><td>${p.Nazim ? (by[p.Nazim] ? by[p.Nazim].EmpName : p.Nazim) : '—'}</td><td>${p.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Off</span>`}</td></tr>`;
-  })}` : h`<tr><td colspan="6" class="muted">No one found.</td></tr>`);
+    const canDel = p.EmpCode !== meCode && p.EmpCode !== 'ADMIN';
+    return h`<tr class="click" data-act="editperson" data-c="${p.EmpCode}" tabindex="0"><td><b>${p.EmpName}</b><br><small>${p.Email}</small></td><td>${p.EmpCode}</td><td><b>${p.Role}</b>${p.AppRole && p.AppRole !== 'User' ? h`<br><span class="task-origin">${p.AppRole}</span>` : ''}</td><td>${loc || '—'}</td><td>${p.Nazim ? (by[p.Nazim] ? by[p.Nazim].EmpName : p.Nazim) : '—'}</td><td>${p.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Off</span>`}</td><td>${canDel ? h`<button type="button" class="btn ghost sm danger" data-act="delperson" data-c="${p.EmpCode}" data-n="${p.EmpName}" title="Delete person">Delete</button>` : ''}</td></tr>`;
+  })}` : h`<tr><td colspan="7" class="muted">No one found.</td></tr>`);
 }
 function personRegionOptionsHtml(curReg) {
   const list = S.admin.regionNames || [];
@@ -3385,7 +3550,7 @@ function openPerson(code) {
     <label class="field"><span>${isNew ? 'Password' : 'New password'} ${isNew ? '' : h`<small class="muted">(leave empty to keep current; for existing users use reset email below)</small>`}</span><div class="actions" style="flex-wrap:nowrap"><input id="pe-pw" type="text" autocomplete="off" ${isNew ? 'required' : ''} maxlength="100" style="flex:1;min-height:40px;padding:8px 11px;border:1px solid var(--line2);border-radius:var(--r)"><button type="button" class="btn" data-act="genpw">Generate</button>${!isNew ? h`<button type="button" class="btn" data-act="sendpwreset" data-c="${p.EmpCode}" data-busy="Sending">Send Reset Email</button>` : ''}</div><small class="hint">${isNew ? 'Initial password (min 6 characters) takes effect immediately.' : 'Existing users reset forgotten passwords via a secure email link.'}</small></label>
     ${!isNew && h`<label class="field" style="display:flex;gap:12px;align-items:center"><span class="sw"><input id="pe-active" type="checkbox" ${p.Active === 'Y' ? 'checked' : ''}><span></span></span><span style="margin:0">Account is active</span></label>`}
     <div id="pe-err" class="notice bad" role="alert" hidden></div></form>`,
-    h`<button class="btn" data-act="closedrawer">Cancel</button><button class="btn primary" data-act="submitform" data-f="personForm" data-busy="Saving">${isNew ? 'Add person' : 'Save changes'}</button>`);
+    h`${!isNew && p.EmpCode !== (S.boot && S.boot.user && S.boot.user.EmpCode) && p.EmpCode !== 'ADMIN' ? h`<button type="button" class="btn danger" style="margin-right:auto" data-act="delperson" data-c="${p.EmpCode}" data-n="${p.EmpName}" data-busy="Deleting">Delete person</button>` : ''}<button class="btn" data-act="closedrawer">Cancel</button><button class="btn primary" data-act="submitform" data-f="personForm" data-busy="Saving">${isNew ? 'Add person' : 'Save changes'}</button>`);
 }
 async function savePerson(form, btn) {
   const err = $('#pe-err'); err.hidden = true; const isNew = !!form.dataset.new;
@@ -3408,7 +3573,7 @@ async function adminTemplates() {
 const tplShownFor = t => t.all ? h`<span class="task-origin">All designations</span>` : t.roles.length ? h`${t.roles.map(r => h`<span class="task-origin" style="margin:0 4px 4px 0">${r}</span>`)}` : h`<small class="muted">Not shown to anyone</small>`;
 function paintAdminTemplates() {
   const list = S.admin.tpls || [];
-  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">Task templates</h3><div class="actions"><button class="btn" data-act="goimport" data-kind="templates">⬆ Import Excel</button><button class="btn primary" data-act="newtpl">+ New template</button></div></div>
+  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">Task templates</h3><div class="actions"><button class="btn" data-act="goimport" data-kind="templates">Import Excel</button><button class="btn primary" data-act="newtpl">+ New template</button></div></div>
     <p class="muted">A template is a ready-made task (title, description). Nazims and admins pick it instead of typing. Choose which <b>designations</b> each template is shown for; the designation is the one held by the <b>employee receiving</b> the task. Switch a template off to hide it from everyone without deleting it.</p>
     ${list.length ? h`<div class="scroll-x"><table class="tbl"><thead><tr><th>Template</th><th>Shown for</th><th>On</th><th></th></tr></thead><tbody>${list.map(t => h`<tr><td><b>${t.title}</b>${t.description && h`<br><small class="muted">${t.description.length > 90 ? t.description.slice(0, 90) + '…' : t.description}</small>`}</td><td>${tplShownFor(t)}</td><td><label class="sw"><input type="checkbox" data-ch="tplactive" data-id="${t.id}" ${t.active ? 'checked' : ''} aria-label="Template is on"><span></span></label></td><td><button class="btn sm" data-act="edittpl" data-id="${t.id}">Edit</button></td></tr>`)}</tbody></table></div>` : h`<div class="empty"><b>No templates yet</b>Create your first one, for example “Prepare monthly salary register”.</div>`}</div>`);
 }
@@ -3971,7 +4136,7 @@ function paintAdminImport() {
             ${schema.notes.map(n => h`<li>${n}</li>`)}
           </ul>
           <div class="actions">
-            <button type="button" class="btn primary" data-act="dltemplate" data-fmt="xlsx" data-busy="Preparing">⬇ Download Excel Template (.xlsx)</button>
+            <button type="button" class="btn primary" data-act="dltemplate" data-fmt="xlsx" data-busy="Preparing">Download Excel Template (.xlsx)</button>
             <button type="button" class="btn sm" data-act="dltemplate" data-fmt="csv">Download CSV</button>
           </div>
         </div>
@@ -3980,7 +4145,7 @@ function paintAdminImport() {
           <h3>2. Upload Filled File</h3>
           <input id="imp-file" type="file" accept=".xlsx,.xls,.csv" hidden>
           <div class="imp-drop" id="imp-drop" data-act="pickimpfile" tabindex="0" role="button" aria-label="Choose Excel or CSV file">
-            <b style="font-size:1rem">📄 Drop Excel (.xlsx / .xls) or CSV file here</b>
+            <b style="font-size:1rem">Drop Excel (.xlsx / .xls) or CSV file here</b>
             <small class="muted">${S.importFileName ? 'Last file: ' + S.importFileName : 'Or click to browse from your computer'}</small>
             <span class="btn sm" style="margin-top:4px">Choose File</span>
           </div>
@@ -4314,6 +4479,7 @@ const ACT = {
   clearselection: el => { const sc = el.dataset.scope; S.selected[sc].clear(); renderList(sc); },
   applybulk: (el, e) => { e.stopPropagation(); applyBulkStatus(el.dataset.scope, el); },
   applybulkreassign: (el, e) => { e.stopPropagation(); applyBulkReassign(el.dataset.scope, el); },
+  applybulkdelete: (el, e) => { e.stopPropagation(); applyBulkDelete(el.dataset.scope, el); },
   kbmove: (el, e) => { e.stopPropagation(); const t = findTask(el.dataset.id); if (t && el.dataset.s) setStatus(t, el.dataset.s); },
   printdash: () => window.print(),
   opencmd: () => openCommandPalette(),
@@ -4547,8 +4713,12 @@ const ACT = {
     const ep = $('#e-prio');
     if (ep && box.dataset.picker === 'edit' && S.boot) {
       const me = S.boot.user, allowHigh = !!(me.isNazim || me.isAdmin) && el.dataset.c !== me.EmpCode;
-      Array.from(ep.options).forEach(o => { if (o.value === 'Urgent' || o.value === 'High') o.disabled = !allowHigh; });
-      if (!allowHigh && (ep.value === 'Urgent' || ep.value === 'High')) ep.value = 'Normal';
+      const cur = ep.value || 'Normal';
+      const nextVal = (!allowHigh && (cur === 'Urgent' || cur === 'High')) ? 'Normal' : cur;
+      const opts = allowHigh ? ['Urgent', 'High', 'Normal', 'Low'] : ['Normal', 'Low'];
+      ep.innerHTML = opts.map(p => `<option value="${p}"${nextVal === p ? ' selected' : ''}>${p === 'Urgent' ? '🔴 Urgent' : p === 'High' ? '🟠 High' : p}</option>`).join('');
+      ep.value = nextVal;
+      syncCustomSelect(ep);
     }
   },
   showpw: el => { const i = $('#li-pw'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.textContent = show ? 'Hide' : 'Show'; },
@@ -4561,6 +4731,21 @@ const ACT = {
   clearimp: () => { S.importPreview = null; S.importResult = null; S.importFileName = ''; paintAdminImport(); },
   runimport: el => runMasterImport(el),
   addperson: () => openPerson(''), editperson: el => openPerson(el.dataset.c),
+  delperson: (el, e) => {
+    if (e) e.stopPropagation();
+    const code = el.dataset.c, name = el.dataset.n || code;
+    if (!code || !window.confirm(`Permanently delete ${name} (${code})? Their account access and directory record will be removed.`)) return;
+    busy(el, async () => {
+      try {
+        const r = await api('apiDeletePerson', S.token, code);
+        closeDrawer(true);
+        toast(r.message || 'Person deleted.');
+        if (inAdmin('people')) adminPeople();
+      } catch (err) {
+        if (!err.auth) toast(err.message, true);
+      }
+    });
+  },
   newtpl: () => openTemplate(''), edittpl: el => openTemplate(el.dataset.id),
   deltpl: el => { if (!window.confirm('Delete this template? Tasks already created from it are not affected.')) return; busy(el, async () => { try { await api('apiDeleteTemplate', S.token, el.dataset.id); closeDrawer(true); toast('Template deleted.'); if (inAdmin('templates')) adminTemplates(); } catch (e) { if (!e.auth) toast(e.message, true); } }); },
   genpw: () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', v = new Uint32Array(12); (window.crypto || window.msCrypto).getRandomValues(v); $('#pe-pw').value = Array.from(v, x => a[x % a.length]).join('') + '9'; },
@@ -4681,13 +4866,46 @@ const FORMS = {
   adddivision: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'division', { Region: $('#loc-dv-reg').value, State: $('#loc-dv-st').value, Division: $('#loc-new-dv').value, Active: true }); toast('Division added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } })
 };
 document.addEventListener('click', e => {
+  if (DD_OPEN && !e.target.closest('#tm-dd-portal') && !e.target.closest('.tm-dd')) closeCustomSelect();
   $$('.plist').forEach(u => { if (!u.parentElement.contains(e.target)) u.hidden = true; });
   if (e.target === $('#scrim')) return closeDrawer();
   const el = e.target.closest('[data-act]'); if (!el) return;
   const fn = ACT[el.dataset.act]; if (fn) fn(el, e);
 });
+window.addEventListener('resize', () => { if (DD_OPEN) closeCustomSelect(); });
+document.addEventListener('scroll', e => { if (DD_OPEN && e.target !== ddPortal()) closeCustomSelect(); }, true);
 document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault(); const fn = FORMS[f.dataset.form]; if (fn) fn(f, e); });
 document.addEventListener('keydown', e => {
+  if (DD_OPEN) {
+    const opts = DD_OPEN.opts || [];
+    if (e.key === 'Escape') { e.preventDefault(); const b = DD_OPEN.btn; closeCustomSelect(); if (b) b.focus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!opts.length) return;
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      let next = DD_OPEN.hiIdx;
+      for (let step = 0; step < opts.length; step++) {
+        next = (next + dir + opts.length) % opts.length;
+        if (!opts[next].disabled) { DD_OPEN.hiIdx = next; break; }
+      }
+      paintCustomSelectMenu();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const o = opts[DD_OPEN.hiIdx];
+      if (o && !o.disabled) {
+        const sel = DD_OPEN.sel, b = DD_OPEN.btn;
+        sel.selectedIndex = DD_OPEN.hiIdx;
+        sel.value = o.value;
+        syncCustomSelect(sel);
+        closeCustomSelect();
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        if (b) b.focus();
+      }
+      return;
+    }
+  }
   if (isAckLocked()) { if (e.key === 'Escape') e.preventDefault(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
