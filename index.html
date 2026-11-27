@@ -867,7 +867,7 @@ const IC = {
   admin: h`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg>`
 };
 function renderApp() {
-  const b = S.boot, u = b.user, mgr = u.isNazim || u.isAdmin;
+  const b = S.boot, u = b.user, mgr = u.isNazim || u.isAdmin, teamMgr = !!u.hasTeam || mgr;
   const tab = (v, label) => h`<button class="tab" data-act="tab" data-v="${v}">${IC[v]}<span>${label}</span></button>`;
   mount($('#root'), h`<aside class="rail">
       <header class="top">
@@ -877,9 +877,9 @@ function renderApp() {
         </div>
       </header>
       <button class="btn primary newbtn" data-act="newtask">+ New task <span class="kbd-hint" style="margin-left:6px;opacity:.8;background:transparent;border-color:rgba(255,255,255,.4);color:#fff">N</span></button>
-      <nav class="tabs" aria-label="Main">${tab('mine', 'My tasks')}${mgr && tab('dashboard', 'Dashboard')}${mgr && tab('team', 'Team')}${mgr && tab('mail', 'Email')}${u.isAdmin && tab('admin', 'Admin')}</nav>
+      <nav class="tabs" aria-label="Main">${tab('mine', 'My tasks')}${teamMgr && tab('dashboard', 'Dashboard')}${teamMgr && tab('team', 'Team')}${mgr && tab('mail', 'Email')}${u.isAdmin && tab('admin', 'Admin')}</nav>
       <div class="grow"></div>
-      <button class="profile" data-act="profile" aria-label="My profile"><span class="avatar">${initials(u.EmpName)}</span><span><b>${u.EmpName}</b><small>${u.Role}</small></span></button>
+      <button class="profile" data-act="profile" aria-label="My profile"><span class="avatar">${initials(u.EmpName)}</span><span><b>${u.EmpName}</b><small>${u.Role}${u.AppRole && u.AppRole !== 'User' ? ' · ' + u.AppRole : ''}</small></span></button>
     </aside>
     <main class="page" id="view"></main>
     <button class="fab" data-act="newtask" aria-label="New task">+</button>`);
@@ -915,8 +915,9 @@ function applyPrefs() {
 function showView(v) {
   const u = S.boot && S.boot.user;
   if (!u) return;
-  if (v === 'team' && !(u.isNazim || u.isAdmin)) v = 'mine';
-  if ((v === 'dashboard' || v === 'mail') && !(u.isNazim || u.isAdmin)) v = 'mine';
+  if (v === 'team' && !(u.hasTeam || u.isNazim || u.isAdmin)) v = 'mine';
+  if (v === 'dashboard' && !(u.hasTeam || u.isNazim || u.isAdmin)) v = 'mine';
+  if (v === 'mail' && !(u.isNazim || u.isAdmin)) v = 'mine';
   if (v === 'admin' && !u.isAdmin) v = 'mine';
   S.view = v;
   if (S.dashTimer) { clearInterval(S.dashTimer); S.dashTimer = 0; }
@@ -940,12 +941,28 @@ function dashboardSelect(key, label, options, placeholder) {
 }
 
 function renderDashboardShell() {
-  const d = S.dashboard, o = (d && d.options) || { locations: [], regions: [], roles: [], employees: [], nazims: [] };
-  const isAdmin = !!(S.boot && S.boot.user && S.boot.user.isAdmin);
+  const d = S.dashboard, o = (d && d.options) || { locations: [], states: [], stateTree: [], divisionTree: [], regions: [], roles: [], employees: [], nazims: [] };
+  const u = S.boot && S.boot.user || {};
+  const isAdmin = !!(u.isAdmin || u.isHeadOffice);
+  const canSeeRegions = isAdmin && (o.regions || []).length > 0;
+  const canSeeStates = (isAdmin || u.AppRole === 'Region Admin') && ((o.states || []).length > 0 || (o.stateTree || []).length > 0);
+  const canSeeDivisions = (isAdmin || u.AppRole === 'Region Admin' || u.AppRole === 'State Admin') && ((o.locations || []).length > 0 || (o.divisionTree || []).length > 0);
+  const canSeeRoles = isAdmin || !!u.isAreaAdmin;
+
+  const selReg = S.dashFilters.region || '';
+  const selState = S.dashFilters.state || '';
+  const filteredStates = (o.stateTree && o.stateTree.length)
+    ? Array.from(new Set(o.stateTree.filter(s => !selReg || s.Region === selReg).map(s => s.State))).sort()
+    : (o.states || []);
+  const filteredDivs = (o.divisionTree && o.divisionTree.length)
+    ? Array.from(new Set(o.divisionTree.filter(dv => (!selReg || dv.Region === selReg) && (!selState || dv.State === selState)).map(dv => dv.Division))).sort()
+    : (o.locations || []);
+
   const activeCount = Object.keys(S.dashFilters).filter(k => S.dashFilters[k] && k !== 'offset').length;
   const activeFilters = [];
-  if (S.dashFilters.location) activeFilters.push({ k: 'location', label: 'Office: ' + S.dashFilters.location });
   if (S.dashFilters.region) activeFilters.push({ k: 'region', label: 'Region: ' + S.dashFilters.region });
+  if (S.dashFilters.state) activeFilters.push({ k: 'state', label: 'State: ' + S.dashFilters.state });
+  if (S.dashFilters.location) activeFilters.push({ k: 'location', label: 'Division: ' + S.dashFilters.location });
   if (S.dashFilters.role) activeFilters.push({ k: 'role', label: 'Role: ' + S.dashFilters.role });
   if (S.dashFilters.nazim) {
     const n = (o.nazims || []).find(x => x.code === S.dashFilters.nazim);
@@ -978,11 +995,12 @@ function renderDashboardShell() {
       </div>
 
       <div id="dash-filter-container" class="nx-filters" ${S.dashFilterOpen ? '' : 'hidden'}>
-        ${isAdmin ? dashboardSelect('location', 'Office / Division', o.locations, 'All offices') : ''}
-        ${isAdmin ? dashboardSelect('region', 'Region', o.regions, 'All regions') : ''}
-        ${isAdmin ? dashboardSelect('role', 'Job Role', o.roles, 'All roles') : ''}
-        ${isAdmin ? dashboardSelect('nazim', 'Nazim', o.nazims, 'All Nazims') : ''}
-        ${dashboardSelect('employee', 'Team Member', o.employees, 'Everyone')}
+        ${canSeeRegions ? dashboardSelect('region', 'Region (India)', o.regions, 'All regions') : ''}
+        ${canSeeStates ? dashboardSelect('state', 'State', filteredStates, 'All states') : ''}
+        ${canSeeDivisions ? dashboardSelect('location', 'Division', filteredDivs, 'All divisions') : ''}
+        ${canSeeRoles ? dashboardSelect('role', 'Job Role', o.roles || [], 'All roles') : ''}
+        ${isAdmin ? dashboardSelect('nazim', 'Nazim', o.nazims || [], 'All Nazims') : ''}
+        ${dashboardSelect('employee', 'Team Member', o.employees || [], 'Everyone')}
       </div>
 
       ${activeFilters.length ? h`<div class="nx-chips"><small class="muted" style="font-weight:600">Filtered by:</small>${activeFilters.map(f => h`<span class="nx-chip">${f.label}<button type="button" data-act="dashclearfilter" data-k="${f.k}" title="Remove filter">✕</button></span>`)}</div>` : ''}
@@ -1382,13 +1400,17 @@ function areaBarsCard(title, sub, items, filterKey, canClickFilter) {
 }
 
 function paintDashboardAreas(box, d) {
-  const isAdmin = !!(S.boot && S.boot.user && S.boot.user.isAdmin);
+  const u = S.boot && S.boot.user || {};
+  const canFilterArea = !!(u.isAdmin || u.isHeadOffice || u.isAreaAdmin);
   mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
     <div class="nx-grid-2">
-      ${areaBarsCard('By Office / Division', isAdmin ? 'Click an office to filter tasks' : 'Task progress across offices', d.byLocation, 'location', isAdmin)}
-      ${areaBarsCard('By Region', isAdmin ? 'Click a region to filter tasks' : 'Task progress across regions', d.byRegion, 'region', isAdmin)}
+      ${areaBarsCard('By Region', canFilterArea ? 'Click a region to filter tasks' : 'Task progress across regions', d.byRegion, 'region', canFilterArea && (u.isAdmin || u.isHeadOffice))}
+      ${areaBarsCard('By State', canFilterArea ? 'Click a state to filter tasks' : 'Task progress across states', d.byState || [], 'state', canFilterArea && (u.isAdmin || u.isHeadOffice || u.AppRole === 'Region Admin'))}
     </div>
-    ${areaBarsCard('By Job Role', isAdmin ? 'Click a role to filter tasks' : 'Breakdown by designation', d.byRole, 'role', isAdmin)}
+    <div class="nx-grid-2">
+      ${areaBarsCard('By Division', canFilterArea ? 'Click a division to filter tasks' : 'Task progress across divisions', d.byLocation, 'location', canFilterArea && u.AppRole !== 'Division Admin')}
+      ${areaBarsCard('By Job Role', canFilterArea ? 'Click a role to filter tasks' : 'Breakdown by designation', d.byRole, 'role', canFilterArea)}
+    </div>
   </div>`);
 }
 
@@ -1672,17 +1694,33 @@ function paintMailManagers() {
   mount(box, S.mailManagers.length ? h`${list.length ? h`<div class="manager-mail-list">${list.map(m => h`<label class="manager-mail-option"><input type="checkbox" data-act="mailmanager" data-code="${m.code}" ${S.mailManagerCodes.has(m.code) ? 'checked' : ''}><span><b>${m.name}</b> · ${m.code} · ${m.employees} direct report(s)<br><small class="muted">${m.email || 'No email on file'}</small></span></label>`)}</div>` : h`<div class="notice">No Nazims match “${S.mailManagerSearch}”.</div>`}<small class="hint">${S.mailManagerCodes.size} of ${S.mailManagers.length} Nazim(s) selected. Nazims without a valid email or open tasks will be skipped.</small>` : h`<span>No active Nazims with direct reports were found.</span>`);
 }
 /* ================= task lists ================= */
+function teamStateOptions(region) {
+  const L = S.boot && S.boot.lists || {};
+  const list = L.states || [];
+  return Array.from(new Set(list.filter(s => !region || s.Region === region).map(s => s.State))).sort();
+}
+function teamDivisionOptions(region, state) {
+  const L = S.boot && S.boot.lists || {};
+  const list = L.divisionsList || [];
+  if (list.length) {
+    return Array.from(new Set(list.filter(d => (!region || d.Region === region) && (!state || d.State === state)).map(d => d.Division))).sort();
+  }
+  return L.divisions || [];
+}
 function renderTasksShell(scope) {
-  const f = S.filters[scope], L = S.boot.lists || { regions: [], divisions: [], roles: [] };
+  const f = S.filters[scope], L = S.boot.lists || { regions: [], states: [], divisionsList: [], divisions: [], roles: [] };
   const opt = (arr, cur, all) => h`<option value="">${all}</option>${arr.map(x => h`<option ${x === cur ? 'selected' : ''}>${x}</option>`)}`;
+  const stateOpts = teamStateOptions(f.region || '');
+  const divOpts = teamDivisionOptions(f.region || '', f.state || '');
   mount($('#view'), h`<div class="hello"><div id="hello"></div>${scope === 'mine' && h`<form class="qa" data-form="quickadd"><input id="qa-t" maxlength="200" placeholder="Add a task for yourself…" aria-label="New task title" autocomplete="off"><button class="btn primary" data-busy="Adding">Add</button></form><div class="qdue" role="group" aria-label="Due date">${[[0, 'Today'], [1, 'Tomorrow'], [7, 'Next week']].map(x => h`<button type="button" class="qpill" data-act="qdue" data-d="${x[0]}" aria-pressed="${(S.qdue || 0) === x[0]}">${x[1]}</button>`)}</div>`}</div>
     <div id="chips" class="chips"></div>
     <div class="filters">
       <input class="search" data-in="filter" data-k="search" type="search" placeholder="${scope === 'team' ? 'Search tasks or people' : 'Search my tasks'}" value="${f.search || ''}" aria-label="Search" maxlength="100">
       ${scope === 'team' && h`<input data-in="filter" data-k="employee" type="search" placeholder="Person name or code" value="${f.employee || ''}" aria-label="Person" style="width:170px" maxlength="100">
-      <select data-ch="filter" data-k="region" aria-label="Region">${opt(L.regions, f.region, 'All regions')}</select>
-      <select data-ch="filter" data-k="division" aria-label="Division">${opt(L.divisions, f.division, 'All divisions')}</select>
-      <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles, f.role, 'All roles')}</select>`}
+      <select data-ch="filter" data-k="region" aria-label="Region">${opt(L.regions || [], f.region, 'All regions (India)')}</select>
+      <select data-ch="filter" data-k="state" id="flt-state" aria-label="State">${opt(stateOpts, f.state, 'All states')}</select>
+      <select data-ch="filter" data-k="division" id="flt-division" aria-label="Division">${opt(divOpts, f.division, 'All divisions')}</select>
+      <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles || [], f.role, 'All roles')}</select>`}
     </div>
     <div id="bulkbar"></div><div id="list"></div><div id="more" class="more-wrap"></div>`);
   renderChips(scope); renderList(scope);
@@ -1695,7 +1733,8 @@ function renderChips(scope) {
 }
 function taskRow(t, scope) {
   const cls = t.Status === 'Completed' ? 'is-done' : t.Overdue ? 'is-over' : t.Status === 'In Progress' ? 'is-prog' : '';
-  const who = scope === 'team' ? h`<span>${t.AssignedToName}</span><span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>` : h`<span>From ${t.AssignedByName}</span>`;
+  const loc = [t.Region, t.State, t.Division].filter(Boolean).join(' / ');
+  const who = scope === 'team' ? h`<span>${t.AssignedToName}</span><span>${loc}</span>` : h`<span>From ${t.AssignedByName}</span>`;
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
     <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
@@ -2461,7 +2500,8 @@ async function applyBulkStatus(scope, btn) {
 /* ---- profile ---- */
 function openProfile() {
   const u = S.boot.user;
-  openDrawer(dheadH(u.EmpName, u.EmpCode), h`<dl class="kv sec"><dt>Role</dt><dd>${u.Role}</dd><dt>Region</dt><dd>${u.Region}${u.Division ? ' / ' + u.Division : ''}</dd><dt>Manager</dt><dd>${u.NazimName || '—'}</dd></dl>
+  const loc = ['India', u.Region, u.State, u.Division].filter(Boolean).join(' › ');
+  openDrawer(dheadH(u.EmpName, u.EmpCode), h`<dl class="kv sec"><dt>Role</dt><dd>${u.Role}</dd><dt>App Role</dt><dd>${u.AppRole || 'User'}</dd><dt>Location</dt><dd>${loc}</dd><dt>Manager</dt><dd>${u.NazimName || '—'}</dd></dl>
     <form class="sec" data-form="changepw"><h3>🔒 Change password</h3><p class="muted">Updating your password also re-secures your private encryption key.</p><label class="field"><span>Current password</span><input id="cp-cur" type="password" required autocomplete="current-password"></label><label class="field"><span>New password (min 8 chars)</span><input id="cp-new" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn sm primary" data-busy="Updating">Update password</button></form>
     <div class="sec"><h3>Appearance</h3><div class="actions"><div class="seg" role="group" aria-label="Theme">${[['', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(x => h`<button type="button" data-act="theme" data-v="${x[0]}" aria-pressed="${(store.get('tm.theme') || '') === x[0]}">${x[1]}</button>`)}</div><div class="seg" role="group" aria-label="Density">${[['', 'Comfortable'], ['compact', 'Compact']].map(x => h`<button type="button" data-act="density" data-v="${x[0]}" aria-pressed="${(store.get('tm.density') || '') === x[0]}">${x[1]}</button>`)}</div></div></div>
     <div class="sec"><h3>Sessions</h3><p class="muted">You stay signed in on this device for about ${S.boot.app.sessionDays} days.</p><div class="actions"><button class="btn" data-act="signout">Sign out</button><button class="btn danger" data-act="signoutall" data-busy="Working">Sign out on all devices</button></div></div>`);
@@ -2488,7 +2528,7 @@ async function signOut(all, btn) {
 }
 
 /* ================= admin ================= */
-const ADMIN_TABS = [['overview', 'Overview'], ['people', 'People'], ['roles', 'Roles'], ['templates', 'Task templates'], ['import', 'Import'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
+const ADMIN_TABS = [['overview', 'Overview'], ['people', 'People'], ['roles', 'Roles'], ['locations', 'Locations'], ['templates', 'Task templates'], ['import', 'Import'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
 function renderAdmin() {
   mount($('#view'), h`<div class="subtabs" role="tablist">${ADMIN_TABS.map(t => h`<button class="subtab" role="tab" data-act="admintab" data-t="${t[0]}" ${S.adminTab === t[0] ? 'aria-current=page' : ''}>${t[1]}</button>`)}</div><div id="adm"></div>`);
   adminLoad();
@@ -2499,6 +2539,7 @@ async function adminLoad() {
     if (tab === 'overview') await adminOverview();
     else if (tab === 'people') await adminPeople();
     else if (tab === 'roles') await adminRoles();
+    else if (tab === 'locations') await adminLocations();
     else if (tab === 'templates') await adminTemplates();
     else if (tab === 'import') await adminImport();
     else if (tab === 'reminders') await adminSched();
@@ -2533,24 +2574,53 @@ async function adminOverview() {
 
 async function adminPeople() {
   const r = await api('apiAdminPeople', S.token); if (!inAdmin('people')) return;
-  S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.q = S.admin.q || '';
+  S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.states = r.states || []; S.admin.divisions = r.divisions || []; S.admin.appRoles = r.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin']; S.admin.q = S.admin.q || '';
   mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><div class="actions"><button class="btn" data-act="goimport" data-kind="people">⬆ Import Excel</button><button class="btn primary" data-act="addperson">+ Add person</button></div></div>
-    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role</th><th>Region</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
+    <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role / Scope</th><th>Location (Region › State › Division)</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
   paintPeople();
 }
 function paintPeople() {
   const q = (S.admin.q || '').toLowerCase(), by = {}; S.admin.people.forEach(p => { by[p.EmpCode] = p; });
-  const rows = S.admin.people.filter(p => !q || (p.EmpName + ' ' + p.EmpCode + ' ' + p.Role + ' ' + p.Region).toLowerCase().includes(q)).slice(0, 300);
-  mount($('#ptbody'), rows.length ? h`${rows.map(p => h`<tr class="click" data-act="editperson" data-c="${p.EmpCode}" tabindex="0"><td><b>${p.EmpName}</b><br><small>${p.Email}</small></td><td>${p.EmpCode}</td><td>${p.Role}</td><td>${p.Region}</td><td>${p.Nazim ? (by[p.Nazim] ? by[p.Nazim].EmpName : p.Nazim) : '—'}</td><td>${p.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Off</span>`}</td></tr>`)}` : h`<tr><td colspan="6" class="muted">No one found.</td></tr>`);
+  const rows = S.admin.people.filter(p => !q || (p.EmpName + ' ' + p.EmpCode + ' ' + p.Role + ' ' + (p.AppRole || '') + ' ' + p.Region + ' ' + (p.State || '') + ' ' + (p.Division || '')).toLowerCase().includes(q)).slice(0, 300);
+  mount($('#ptbody'), rows.length ? h`${rows.map(p => {
+    const loc = [p.Region, p.State, p.Division].filter(Boolean).join(' › ');
+    return h`<tr class="click" data-act="editperson" data-c="${p.EmpCode}" tabindex="0"><td><b>${p.EmpName}</b><br><small>${p.Email}</small></td><td>${p.EmpCode}</td><td><b>${p.Role}</b>${p.AppRole && p.AppRole !== 'User' ? h`<br><span class="task-origin">${p.AppRole}</span>` : ''}</td><td>${loc || '—'}</td><td>${p.Nazim ? (by[p.Nazim] ? by[p.Nazim].EmpName : p.Nazim) : '—'}</td><td>${p.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Off</span>`}</td></tr>`;
+  })}` : h`<tr><td colspan="6" class="muted">No one found.</td></tr>`);
+}
+function personStateOptionsHtml(region, curState) {
+  const list = (S.admin.states || []).filter(s => !region || s.Region === region).map(s => s.State);
+  const all = curState && !list.includes(curState) ? [curState].concat(list) : list;
+  return '<option value="">' + (region ? 'Choose state…' : 'Select Region first…') + '</option>' + all.map(s => `<option value="${esc(s)}" ${s === curState ? 'selected' : ''}>${esc(s)}</option>`).join('');
+}
+function personDivisionOptionsHtml(region, state, curDiv) {
+  const list = (S.admin.divisions || []).filter(d => (!region || d.Region === region) && (!state || d.State === state)).map(d => d.Division);
+  const all = curDiv && !list.includes(curDiv) ? [curDiv].concat(list) : list;
+  return '<option value="">' + (state ? 'Choose division…' : 'Select State first…') + '</option>' + all.map(d => `<option value="${esc(d)}" ${d === curDiv ? 'selected' : ''}>${esc(d)}</option>`).join('');
 }
 function openPerson(code) {
-  const p = code ? S.admin.people.find(x => x.EmpCode === code) : { EmpCode: '', EmpName: '', Nazim: '', Division: '', Region: '', Role: '', Email: '', Active: 'Y' }, isNew = !code;
+  const p = code ? S.admin.people.find(x => x.EmpCode === code) : { EmpCode: '', EmpName: '', Nazim: '', Division: '', State: '', Region: '', Role: '', AppRole: 'User', Email: '', Active: 'Y' }, isNew = !code;
   const src = S.admin.people.filter(x => x.Active === 'Y' && x.EmpCode !== code).map(x => ({ c: x.EmpCode, n: x.EmpName, r: x.Role, g: x.Region }));
   const sel = (arr, cur) => h`<option value="">Choose…</option>${arr.map(x => h`<option ${x === cur ? 'selected' : ''}>${x}</option>`)}`;
+  const appRoles = S.admin.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin'];
+  const stateOpts = (S.admin.states || []).filter(s => p.Region && s.Region === p.Region).map(s => s.State);
+  if (p.State && !stateOpts.includes(p.State)) stateOpts.unshift(p.State);
+  const divOpts = (S.admin.divisions || []).filter(d => p.Region && d.Region === p.Region && (!p.State || d.State === p.State)).map(d => d.Division);
+  if (p.Division && !divOpts.includes(p.Division)) divOpts.unshift(p.Division);
+
   openDrawer(dheadH(isNew ? 'Add person' : p.EmpName, isNew ? '' : p.EmpCode), h`<form id="personForm" data-form="saveperson" data-new="${isNew ? '1' : ''}">
     <div class="two"><label class="field"><span>Employee code</span><input id="pe-code" value="${p.EmpCode}" ${isNew ? 'autofocus' : 'readonly'} required maxlength="30"></label><label class="field"><span>Full name</span><input id="pe-name" value="${p.EmpName}" required maxlength="100"></label></div>
-    <div class="two"><label class="field"><span>Role</span><select id="pe-role" required>${sel(S.admin.roleNames, p.Role)}</select></label><label class="field"><span>Region</span><select id="pe-region" required>${sel(S.admin.regionNames, p.Region)}</select></label></div>
-    <div class="two"><label class="field"><span>Division</span><input id="pe-div" value="${p.Division}" maxlength="80"></label><div class="field"><span>Assign Nazim</span>${pickerH('mgr', src, p.Nazim, 'Type a name or code')}<small class="hint">Choose the employee's Nazim. Leave empty only for the top of a reporting chain.</small></div></div>
+    <div class="two">
+      <label class="field"><span>Job Role</span><select id="pe-role" required>${sel(S.admin.roleNames, p.Role)}</select></label>
+      <label class="field"><span>App Role (Task Scope)</span><select id="pe-approle">${appRoles.map(ar => h`<option value="${ar}" ${(p.AppRole || 'User') === ar ? 'selected' : ''}>${ar}</option>`)}</select><small class="hint">Division/State/Region Admins see all tasks in their assigned area.</small></label>
+    </div>
+    <div class="two">
+      <label class="field"><span>Region (India)</span><select id="pe-region" data-ch="peregion" required>${sel(S.admin.regionNames, p.Region)}</select></label>
+      <label class="field"><span>State</span><select id="pe-state" data-ch="pestate"><option value="">${p.Region ? 'Choose state…' : 'Select Region first…'}</option>${stateOpts.map(s => h`<option value="${s}" ${s === p.State ? 'selected' : ''}>${s}</option>`)}</select></label>
+    </div>
+    <div class="two">
+      <label class="field"><span>Division</span><select id="pe-div"><option value="">${p.State ? 'Choose division…' : 'Select State first…'}</option>${divOpts.map(d => h`<option value="${d}" ${d === p.Division ? 'selected' : ''}>${d}</option>`)}</select></label>
+      <div class="field"><span>Assign Nazim</span>${pickerH('mgr', src, p.Nazim, 'Type a name or code')}<small class="hint">Leave empty only for top of chain.</small></div>
+    </div>
     <label class="field"><span>Email</span><input id="pe-email" type="email" value="${p.Email}" required maxlength="254"></label>
     <label class="field"><span>${isNew ? 'Password' : 'New password'} ${isNew ? '' : h`<small class="muted">(leave empty to keep current; for existing users use reset email below)</small>`}</span><div class="actions" style="flex-wrap:nowrap"><input id="pe-pw" type="text" autocomplete="off" ${isNew ? 'required' : ''} maxlength="100" style="flex:1;min-height:40px;padding:8px 11px;border:1px solid var(--line2);border-radius:var(--r)"><button type="button" class="btn" data-act="genpw">Generate</button>${!isNew ? h`<button type="button" class="btn" data-act="sendpwreset" data-c="${p.EmpCode}" data-busy="Sending">Send Reset Email</button>` : ''}</div><small class="hint">${isNew ? 'Initial password (min 6 characters) takes effect immediately.' : 'Existing users reset forgotten passwords via a secure email link.'}</small></label>
     ${!isNew && h`<label class="field" style="display:flex;gap:12px;align-items:center"><span class="sw"><input id="pe-active" type="checkbox" ${p.Active === 'Y' ? 'checked' : ''}><span></span></span><span style="margin:0">Account is active</span></label>`}
@@ -2559,7 +2629,7 @@ function openPerson(code) {
 }
 async function savePerson(form, btn) {
   const err = $('#pe-err'); err.hidden = true; const isNew = !!form.dataset.new;
-  const body = { EmpCode: $('#pe-code').value, EmpName: $('#pe-name').value, Role: $('#pe-role').value, Region: $('#pe-region').value, Division: $('#pe-div').value, Nazim: $('.pval', form).value, Email: $('#pe-email').value, Password: $('#pe-pw').value };
+  const body = { EmpCode: $('#pe-code').value, EmpName: $('#pe-name').value, Role: $('#pe-role').value, AppRole: $('#pe-approle').value, Region: $('#pe-region').value, State: $('#pe-state').value, Division: $('#pe-div').value, Nazim: $('.pval', form).value, Email: $('#pe-email').value, Password: $('#pe-pw').value };
   if (!isNew) body.Active = $('#pe-active').checked ? 'Y' : 'N';
   await busy(btn, async () => { try { await api('apiSavePerson', S.token, body); closeDrawer(true); toast(isNew ? 'Person added.' : 'Saved.'); if (inAdmin('people')) adminPeople(); } catch (e) { err.textContent = e.message; err.hidden = false; } });
 }
@@ -2614,6 +2684,80 @@ function paintRoles() {
     <div class="actions" style="margin-top:14px"><button class="btn" data-act="addrole">+ Add role</button><button class="btn" data-act="goimport" data-kind="roles">⬆ Import Excel</button><button class="btn primary" data-act="saveroles" data-busy="Saving">Save roles</button></div><div id="rl-err" class="notice bad" hidden style="margin-top:12px"></div></div>`);
 }
 
+/* ---- admin: locations hierarchy (India > Region > State > Division) ---- */
+async function adminLocations() {
+  const r = await api('apiAdminLocations', S.token); if (!inAdmin('locations')) return;
+  S.admin.loc = { regions: r.regions || [], states: r.states || [], divisions: r.divisions || [] };
+  S.admin.locReg = S.admin.locReg || '';
+  S.admin.locState = S.admin.locState || '';
+  paintLocations();
+}
+function paintLocations() {
+  const loc = S.admin.loc || { regions: [], states: [], divisions: [] };
+  const activeRegs = loc.regions.filter(r => r.Active).map(r => r.Region);
+  const fReg = S.admin.locReg || '';
+  const fState = S.admin.locState || '';
+  const statesForReg = loc.states.filter(s => !fReg || s.Region === fReg);
+  const activeStatesForReg = statesForReg.filter(s => s.Active).map(s => s.State);
+  const divsFiltered = loc.divisions.filter(d => (!fReg || d.Region === fReg) && (!fState || d.State === fState));
+
+  mount($('#adm'), h`<div style="display:grid;gap:16px">
+    <section class="panel" style="margin:0">
+      <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <h3 style="margin:0">Location Hierarchy (India › Region › State › Division)</h3>
+          <small class="muted">Select a Region to manage its States, and select a State to manage its Divisions.</small>
+        </div>
+        <button type="button" class="btn" data-act="goimport" data-kind="locations">⬆ Import Excel</button>
+      </div>
+      <div class="two" style="margin-top:10px">
+        <label class="field" style="margin:0"><span>Filter by Region (India)</span>
+          <select id="loc-f-reg" data-ch="locfreg"><option value="">All regions (${loc.regions.length})</option>${loc.regions.map(r => h`<option value="${r.Region}" ${fReg === r.Region ? 'selected' : ''}>${r.Region}</option>`)}</select>
+        </label>
+        <label class="field" style="margin:0"><span>Filter by State</span>
+          <select id="loc-f-state" data-ch="locfstate"><option value="">All states (${statesForReg.length})</option>${Array.from(new Set(statesForReg.map(s => s.State))).map(s => h`<option value="${s}" ${fState === s ? 'selected' : ''}>${s}</option>`)}</select>
+        </label>
+      </div>
+    </section>
+
+    <div class="adm-grid">
+      <section class="panel" style="margin:0">
+        <h3>1. Regions (under India)</h3>
+        <form data-form="addregion" style="display:flex;gap:8px;margin-bottom:12px">
+          <input id="loc-new-reg" class="cell-in" placeholder="New region name (e.g. Delhi)" maxlength="60" required>
+          <button class="btn primary sm" data-busy="Adding">+ Add</button>
+        </form>
+        <div class="scroll-x" style="max-height:300px;overflow-y:auto"><table class="tbl"><thead><tr><th>Region</th><th>Active</th></tr></thead><tbody>
+          ${loc.regions.map(r => h`<tr><td><b>${r.Region}</b></td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="region" data-id="${r.id || r.Region}" data-name="${r.Region}" ${r.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
+        </tbody></table></div>
+      </section>
+
+      <section class="panel" style="margin:0">
+        <h3>2. States (under Region)</h3>
+        <form data-form="addstate" style="display:grid;gap:8px;margin-bottom:12px">
+          <select id="loc-st-reg" class="cell-in" required><option value="">Choose parent Region…</option>${activeRegs.map(r => h`<option value="${r}" ${fReg === r ? 'selected' : ''}>${r}</option>`)}</select>
+          <div style="display:flex;gap:8px"><input id="loc-new-st" class="cell-in" placeholder="New state name (e.g. Haryana)" maxlength="60" required><button class="btn primary sm" data-busy="Adding">+ Add</button></div>
+        </form>
+        ${statesForReg.length ? h`<div class="scroll-x" style="max-height:260px;overflow-y:auto"><table class="tbl"><thead><tr><th>State</th><th>Region</th><th>Active</th></tr></thead><tbody>
+          ${statesForReg.map(s => h`<tr><td><b>${s.State}</b></td><td>${s.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="state" data-id="${s.id}" data-reg="${s.Region}" data-name="${s.State}" ${s.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
+        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No states yet</b>Add a state under a Region above.</div>`}
+      </section>
+
+      <section class="panel" style="margin:0;grid-column:1/-1">
+        <h3>3. Divisions (under State)</h3>
+        <form data-form="adddivision" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px;align-items:end">
+          <select id="loc-dv-reg" class="cell-in" data-ch="locdvreg" required><option value="">Choose Region…</option>${activeRegs.map(r => h`<option value="${r}" ${fReg === r ? 'selected' : ''}>${r}</option>`)}</select>
+          <select id="loc-dv-st" class="cell-in" required><option value="">Choose State…</option>${activeStatesForReg.map(s => h`<option value="${s}" ${fState === s ? 'selected' : ''}>${s}</option>`)}</select>
+          <div style="display:flex;gap:8px"><input id="loc-new-dv" class="cell-in" placeholder="New division name" maxlength="80" required><button class="btn primary sm" data-busy="Adding">+ Add</button></div>
+        </form>
+        ${divsFiltered.length ? h`<div class="scroll-x" style="max-height:320px;overflow-y:auto"><table class="tbl"><thead><tr><th>Division</th><th>State</th><th>Region</th><th>Active</th></tr></thead><tbody>
+          ${divsFiltered.map(d => h`<tr><td><b>${d.Division}</b></td><td>${d.State}</td><td>${d.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="division" data-id="${d.id}" data-reg="${d.Region}" data-st="${d.State}" data-name="${d.Division}" ${d.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
+        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No divisions yet</b>Select a Region &amp; State above to add divisions.</div>`}
+      </section>
+    </div>
+  </div>`);
+}
+
 /* ---- admin: master excel import ---- */
 const XLSX_CDN = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
 let xlsxPromise = null;
@@ -2636,19 +2780,41 @@ function ensureXlsxLib() {
 const IMPORT_SCHEMAS = {
   people: {
     title: 'People (with Passwords)',
-    sub: 'Bulk-create new employees, login accounts, hierarchy, and encryption keys (max 100/upload).',
+    sub: 'Bulk-create new employees, App Roles, locations, and encryption keys (max 100/upload).',
     file: 'TaskManagement_People_Template',
-    cols: ['EmpCode', 'EmpName', 'Role', 'Region', 'Division', 'Nazim', 'Email', 'Password'],
-    aliases: { empcode: 'EmpCode', employeecode: 'EmpCode', code: 'EmpCode', empname: 'EmpName', fullname: 'EmpName', name: 'EmpName', role: 'Role', designation: 'Role', region: 'Region', division: 'Division', office: 'Division', nazim: 'Nazim', manager: 'Nazim', managercode: 'Nazim', email: 'Email', password: 'Password', initialpassword: 'Password' },
-    sample: meta => [
-      { EmpCode: 'EMP101', EmpName: 'Example Supervisor', Role: (meta.roles[1] || meta.roles[0] || 'Accountant Supervisor'), Region: (meta.regions[0] || 'Mumbai'), Division: 'Accounts', Nazim: '', Email: 'emp101@example.com', Password: 'ChangeMe@123' },
-      { EmpCode: 'EMP102', EmpName: 'Example Staff', Role: (meta.roles[0] || 'Accountant'), Region: (meta.regions[0] || 'Mumbai'), Division: 'Accounts', Nazim: 'EMP101', Email: 'emp102@example.com', Password: 'ChangeMe@456' }
+    cols: ['EmpCode', 'EmpName', 'Role', 'AppRole', 'Region', 'State', 'Division', 'Nazim', 'Email', 'Password'],
+    aliases: { empcode: 'EmpCode', employeecode: 'EmpCode', code: 'EmpCode', empname: 'EmpName', fullname: 'EmpName', name: 'EmpName', role: 'Role', jobrole: 'Role', designation: 'Role', approle: 'AppRole', taskscope: 'AppRole', scope: 'AppRole', region: 'Region', state: 'State', division: 'Division', office: 'Division', nazim: 'Nazim', manager: 'Nazim', managercode: 'Nazim', email: 'Email', password: 'Password', initialpassword: 'Password' },
+    sample: meta => {
+      const r0 = meta.regions[0] || 'Delhi';
+      const st0 = ((meta.states || []).find(s => s.Region === r0) || {}).State || '';
+      const dv0 = ((meta.divisions || []).find(d => d.Region === r0 && (!st0 || d.State === st0)) || {}).Division || 'Head Office';
+      return [
+        { EmpCode: 'EMP101', EmpName: 'Example Supervisor', Role: (meta.roles[1] || meta.roles[0] || 'Accountant Supervisor'), AppRole: 'State Admin', Region: r0, State: st0, Division: dv0, Nazim: '', Email: 'emp101@example.com', Password: 'ChangeMe@123' },
+        { EmpCode: 'EMP102', EmpName: 'Example Staff', Role: (meta.roles[0] || 'Accountant'), AppRole: 'User', Region: r0, State: st0, Division: dv0, Nazim: 'EMP101', Email: 'emp102@example.com', Password: 'ChangeMe@456' }
+      ];
+    },
+    notes: [
+      'EmpCode: Unique code (max 30 chars). Existing codes are skipped.',
+      'AppRole: User, Division Admin, State Admin, or Region Admin (defaults to User).',
+      'Region / State / Division: Must follow India > Region > State > Division hierarchy (see Reference sheet).',
+      'Password: Initial password (min 6 characters, cannot match EmpCode).'
+    ]
+  },
+  locations: {
+    title: 'Locations (Region › State › Division)',
+    sub: 'Bulk-create Regions, States under Regions, and Divisions under States (max 300/upload).',
+    file: 'TaskManagement_Locations_Template',
+    cols: ['Region', 'State', 'Division', 'Active'],
+    aliases: { region: 'Region', state: 'State', division: 'Division', office: 'Division', active: 'Active' },
+    sample: () => [
+      { Region: 'Delhi', State: 'New Delhi', Division: 'Central Delhi', Active: 'Y' },
+      { Region: 'Delhi', State: 'Haryana', Division: 'Gurugram', Active: 'Y' },
+      { Region: 'Mumbai', State: 'Maharashtra', Division: 'Mumbai South', Active: 'Y' }
     ],
     notes: [
-      'EmpCode: Unique code (letters, numbers, dot, dash, underscore; max 30 chars). Existing codes are skipped.',
-      'Role & Region: Must match an active Role and Region (see Reference sheet).',
-      'Nazim: Optional manager EmpCode (can reference another row in this same Excel file).',
-      'Password: Initial password (min 6 characters, cannot match EmpCode).'
+      'Region: Required (parent under India). New regions are created automatically.',
+      'State: Linked under the specified Region. Leave Division blank to add only Region + State.',
+      'Division: Linked under the specified Region & State (State is required when Division is set).'
     ]
   },
   roles: {
@@ -2733,13 +2899,16 @@ async function downloadImportTemplate(kind, format) {
     ws['!cols'] = schema.cols.map(c => ({ wch: Math.max(16, c === 'Description' || c === 'Title' || c === 'Email' ? 32 : 18) }));
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
 
-    const refRows = [['Field Rules'], ...schema.notes.map(n => [n]), [], ['Active Roles', 'Active Regions']];
-    const maxLen = Math.max((meta.roles || []).length, (meta.regions || []).length);
+    const refRows = [['Field Rules'], ...schema.notes.map(n => [n]), [], ['Active Roles', 'App Roles', 'Active Regions', 'State (Region)', 'Division (Region > State)']];
+    const appRoles = meta.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin'];
+    const statesRef = (meta.states || []).map(s => `${s.State} (${s.Region})`);
+    const divsRef = (meta.divisions || []).map(d => `${d.Division} (${d.Region} > ${d.State})`);
+    const maxLen = Math.max((meta.roles || []).length, appRoles.length, (meta.regions || []).length, statesRef.length, divsRef.length);
     for (let i = 0; i < maxLen; i++) {
-      refRows.push([(meta.roles || [])[i] || '', (meta.regions || [])[i] || '']);
+      refRows.push([(meta.roles || [])[i] || '', appRoles[i] || '', (meta.regions || [])[i] || '', statesRef[i] || '', divsRef[i] || '']);
     }
     const wsRef = XLSX.utils.aoa_to_sheet(refRows);
-    wsRef['!cols'] = [{ wch: 36 }, { wch: 24 }];
+    wsRef['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 38 }];
     XLSX.utils.book_append_sheet(wb, wsRef, 'Reference');
     XLSX.writeFile(wb, schema.file + '.xlsx');
     toast('Excel template downloaded (.xlsx).');
@@ -2770,9 +2939,12 @@ function normalizeImportRows(kind, rawObjects) {
 }
 
 function validateImportPreview(kind, rows) {
-  const meta = S.importMeta || { roles: [], regions: [], existingCodes: [], existingEmails: [], existingTemplateTitles: [], minPasswordLength: 6 };
+  const meta = S.importMeta || { roles: [], regions: [], states: [], divisions: [], appRoles: ['User', 'Division Admin', 'State Admin', 'Region Admin'], existingCodes: [], existingEmails: [], existingTemplateTitles: [], minPasswordLength: 6 };
   const activeRoles = new Set(meta.roles || []);
   const activeRegions = new Set(meta.regions || []);
+  const activeStates = meta.states || [];
+  const activeDivs = meta.divisions || [];
+  const appRoleList = meta.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin'];
   const existingCodes = new Set((meta.existingCodes || []).map(x => String(x).toUpperCase()));
   const existingEmails = new Set((meta.existingEmails || []).map(x => String(x).toLowerCase()));
   const existingTitles = new Set((meta.existingTemplateTitles || []).map(x => String(x).toLowerCase()));
@@ -2786,10 +2958,22 @@ function validateImportPreview(kind, rows) {
   }
 
   return rows.map(r => {
+    if (kind === 'locations') {
+      if (!r.Region) return { row: r, status: 'ERROR', msg: 'Region is required.' };
+      if (r.Division && !r.State) return { row: r, status: 'ERROR', msg: 'State is required when Division is specified.' };
+      const key = [r.Region, r.State, r.Division].filter(Boolean).join('|').toLowerCase();
+      if (seenBatch.has(key)) return { row: r, status: 'SKIP', msg: 'Duplicate row in file.' };
+      seenBatch.add(key);
+      return { row: r, status: 'READY', msg: 'Ready to import' };
+    }
+
     if (kind === 'people') {
       const code = (r.EmpCode || '').toUpperCase();
       r.EmpCode = code;
       r.Nazim = (r.Nazim || '').toUpperCase();
+      const matchedAppRole = appRoleList.find(x => x.toLowerCase() === String(r.AppRole || 'User').toLowerCase());
+      if (!matchedAppRole) return { row: r, status: 'ERROR', msg: `Invalid AppRole "${r.AppRole}".` };
+      r.AppRole = matchedAppRole;
       if (!code) return { row: r, status: 'ERROR', msg: 'EmpCode is required.' };
       if (!/^[A-Za-z0-9._-]{1,30}$/.test(code)) return { row: r, status: 'ERROR', msg: 'EmpCode contains invalid characters.' };
       if (existingCodes.has(code)) return { row: r, status: 'SKIP', msg: 'Already exists in directory.' };
@@ -2798,6 +2982,12 @@ function validateImportPreview(kind, rows) {
       if (!r.EmpName) return { row: r, status: 'ERROR', msg: 'EmpName is required.' };
       if (!activeRoles.has(r.Role)) return { row: r, status: 'ERROR', msg: `Role "${r.Role || '(blank)'}" is unknown or off.` };
       if (!activeRegions.has(r.Region)) return { row: r, status: 'ERROR', msg: `Region "${r.Region || '(blank)'}" is unknown or off.` };
+      const stInReg = activeStates.filter(s => s.Region === r.Region);
+      if ((r.AppRole === 'State Admin' || r.AppRole === 'Division Admin') && !r.State) return { row: r, status: 'ERROR', msg: `State is required for ${r.AppRole}.` };
+      if (r.State && stInReg.length && !stInReg.some(s => s.State === r.State)) return { row: r, status: 'ERROR', msg: `State "${r.State}" is not under "${r.Region}".` };
+      const dvInSt = activeDivs.filter(d => d.Region === r.Region && d.State === r.State);
+      if (r.AppRole === 'Division Admin' && !r.Division) return { row: r, status: 'ERROR', msg: 'Division is required for Division Admin.' };
+      if (r.Division && dvInSt.length && !dvInSt.some(d => d.Division === r.Division)) return { row: r, status: 'ERROR', msg: `Division "${r.Division}" is not under "${r.State}".` };
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.Email || '')) return { row: r, status: 'ERROR', msg: 'Valid Email is required.' };
       const lowEmail = r.Email.toLowerCase();
       if (existingEmails.has(lowEmail) || seenEmails.has(lowEmail)) return { row: r, status: 'ERROR', msg: 'Email already used.' };
@@ -2863,7 +3053,7 @@ async function handleImportFile(file) {
       paintAdminImport();
       return toast('No data rows found. Make sure column headers match the downloaded template.', true);
     }
-    const maxRows = kind === 'people' ? 100 : 200;
+    const maxRows = kind === 'people' ? 100 : kind === 'locations' ? 300 : 200;
     if (normalized.length > maxRows) {
       toast(`Showing first ${maxRows} rows (maximum ${maxRows} rows per upload).`, true);
     }
@@ -2878,7 +3068,7 @@ async function runMasterImport(btn) {
   const kind = S.importType || 'people';
   const readyRows = (S.importPreview || []).filter(x => x.status === 'READY').map(x => x.row);
   if (!readyRows.length) return toast('No valid rows ready to import.', true);
-  const apiName = kind === 'people' ? 'apiImportPeople' : kind === 'roles' ? 'apiImportRoles' : 'apiImportTemplates';
+  const apiName = kind === 'people' ? 'apiImportPeople' : kind === 'locations' ? 'apiImportLocations' : kind === 'roles' ? 'apiImportRoles' : 'apiImportTemplates';
   await busy(btn, async () => {
     try {
       const r = await api(apiName, S.token, readyRows);
@@ -3372,7 +3562,10 @@ const FORMS = {
   savetask: f => { if (!$('.pval', f).value) { const e = $('#e-err'); e.textContent = 'Choose a person from the list.'; e.hidden = false; return; } saveTask(f, findSubmitBtn(f)); },
   createtask: f => createTask(f, findSubmitBtn(f)),
   saveperson: f => savePerson(f, findSubmitBtn(f)),
-  savetemplate: f => saveTemplate(f, findSubmitBtn(f))
+  savetemplate: f => saveTemplate(f, findSubmitBtn(f)),
+  addregion: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'region', { Region: $('#loc-new-reg').value, Active: true }); toast('Region added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  addstate: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'state', { Region: $('#loc-st-reg').value, State: $('#loc-new-st').value, Active: true }); toast('State added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  adddivision: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'division', { Region: $('#loc-dv-reg').value, State: $('#loc-dv-st').value, Division: $('#loc-new-dv').value, Active: true }); toast('Division added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } })
 };
 document.addEventListener('click', e => {
   $$('.plist').forEach(u => { if (!u.parentElement.contains(e.target)) u.hidden = true; });
@@ -3432,8 +3625,63 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.id === 'imp-file' && el.files && el.files[0]) { handleImportFile(el.files[0]); return; }
-  if (el.dataset.ch === 'filter') { const f = S.filters[S.view]; if (el.value) f[el.dataset.k] = el.value; else delete f[el.dataset.k]; loadList(S.view, { silent: true }); }
-  else if (el.dataset.ch === 'dashfilter') { if (el.value) S.dashFilters[el.dataset.k] = el.value; else delete S.dashFilters[el.dataset.k]; delete S.dashFilters.offset; loadDashboard(); }
+  if (el.dataset.ch === 'peregion') {
+    const reg = el.value;
+    const stEl = $('#pe-state'), dvEl = $('#pe-div');
+    if (stEl) { stEl.innerHTML = personStateOptionsHtml(reg, ''); }
+    if (dvEl) { dvEl.innerHTML = personDivisionOptionsHtml(reg, '', ''); }
+    return;
+  }
+  if (el.dataset.ch === 'pestate') {
+    const reg = $('#pe-region') ? $('#pe-region').value : '', st = el.value;
+    const dvEl = $('#pe-div');
+    if (dvEl) { dvEl.innerHTML = personDivisionOptionsHtml(reg, st, ''); }
+    return;
+  }
+  if (el.dataset.ch === 'locfreg') { S.admin.locReg = el.value; S.admin.locState = ''; paintLocations(); return; }
+  if (el.dataset.ch === 'locfstate') { S.admin.locState = el.value; paintLocations(); return; }
+  if (el.dataset.ch === 'locdvreg') {
+    const reg = el.value, stSel = $('#loc-dv-st');
+    if (stSel) {
+      const sts = ((S.admin.loc && S.admin.loc.states) || []).filter(s => s.Active && (!reg || s.Region === reg)).map(s => s.State);
+      stSel.innerHTML = '<option value="">Choose State…</option>' + sts.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    }
+    return;
+  }
+  if (el.dataset.ch === 'locactive') {
+    const kind = el.dataset.kind, on = el.checked;
+    api('apiSaveLocation', S.token, kind, { id: el.dataset.id, Region: el.dataset.reg || el.dataset.name, State: el.dataset.st || el.dataset.name, Division: el.dataset.name, Active: on })
+      .then(() => { toast('Updated.'); adminLocations(); })
+      .catch(err => { el.checked = !on; if (!err.auth) toast(err.message, true); });
+    return;
+  }
+  if (el.dataset.ch === 'filter') {
+    const f = S.filters[S.view], k = el.dataset.k;
+    if (el.value) f[k] = el.value; else delete f[k];
+    if (k === 'region') {
+      const stOpts = teamStateOptions(el.value);
+      if (f.state && !stOpts.includes(f.state)) delete f.state;
+      const dvOpts = teamDivisionOptions(el.value, f.state || '');
+      if (f.division && !dvOpts.includes(f.division)) delete f.division;
+      const stEl = $('#flt-state'), dvEl = $('#flt-division');
+      if (stEl) stEl.innerHTML = '<option value="">All states</option>' + stOpts.map(s => `<option value="${esc(s)}" ${f.state === s ? 'selected' : ''}>${esc(s)}</option>`).join('');
+      if (dvEl) dvEl.innerHTML = '<option value="">All divisions</option>' + dvOpts.map(d => `<option value="${esc(d)}" ${f.division === d ? 'selected' : ''}>${esc(d)}</option>`).join('');
+    } else if (k === 'state') {
+      const dvOpts = teamDivisionOptions(f.region || '', el.value);
+      if (f.division && !dvOpts.includes(f.division)) delete f.division;
+      const dvEl = $('#flt-division');
+      if (dvEl) dvEl.innerHTML = '<option value="">All divisions</option>' + dvOpts.map(d => `<option value="${esc(d)}" ${f.division === d ? 'selected' : ''}>${esc(d)}</option>`).join('');
+    }
+    loadList(S.view, { silent: true });
+  }
+  else if (el.dataset.ch === 'dashfilter') {
+    const k = el.dataset.k;
+    if (el.value) S.dashFilters[k] = el.value; else delete S.dashFilters[k];
+    if (k === 'region') { delete S.dashFilters.state; delete S.dashFilters.location; }
+    else if (k === 'state') { delete S.dashFilters.location; }
+    delete S.dashFilters.offset;
+    loadDashboard();
+  }
   else if (el.id === 'n-due') paintDraftPreview();
   else if (el.dataset.ch === 'assignee') {
     if (el.checked) S.draft.assignees.add(el.dataset.c);
