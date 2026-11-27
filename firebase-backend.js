@@ -29,6 +29,7 @@
   };
 
   const TM_STATUSES = ['Pending', 'In Progress', 'Completed'];
+  const TM_APP_ROLES = ['User', 'Division Admin', 'State Admin', 'Region Admin'];
   const TM_REGIONS = ['Mumbai', 'Hyderabad', 'Kolkata', 'Bangalore', 'Delhi', 'Ajmer'];
   const TM_HO_ROLES = [
     'Compliance Head Office', 'Compliance Team CA',
@@ -287,8 +288,10 @@
       Email: contactEmail || loginEmail,
       AuthEmail: loginEmail,
       Role: empData.Role || 'Employee',
+      AppRole: TM_APP_ROLES.indexOf(empData.AppRole) >= 0 ? empData.AppRole : 'User',
       Nazim: empData.Nazim || '',
       Region: empData.Region || '',
+      State: empData.State || '',
       Division: empData.Division || '',
       Active: tmYN_(empData.Active),
       IsAdmin: isAdmin,
@@ -366,16 +369,74 @@
 
   async function tmRegions_() {
     return memoGet('regions', async () => {
-      if (!initFirebase()) return TM_REGIONS.map(r => ({ Region: r, Active: true }));
+      if (!initFirebase()) return TM_REGIONS.map(r => ({ Region: r, Country: 'India', Active: true }));
       const snap = await db.collection('regions').get();
       const list = [];
       snap.forEach(d => {
         const r = d.data() || {};
         const name = String(r.Region || d.id || '').trim();
-        if (name) list.push({ Region: name, Active: tmYes_(r.Active) });
+        if (name) list.push({ id: d.id, Region: name, Country: String(r.Country || 'India'), Active: tmYes_(r.Active) });
       });
       return list.sort((a, b) => a.Region.localeCompare(b.Region));
     });
+  }
+
+  async function tmStates_() {
+    return memoGet('states', async () => {
+      if (!initFirebase()) return [];
+      const snap = await db.collection('states').get();
+      const list = [];
+      snap.forEach(d => {
+        const s = d.data() || {};
+        const name = String(s.State || '').trim();
+        const region = String(s.Region || '').trim();
+        if (name && region) list.push({ id: d.id, State: name, Region: region, Active: tmYes_(s.Active) });
+      });
+      return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State));
+    });
+  }
+
+  async function tmDivisions_() {
+    return memoGet('divisions', async () => {
+      if (!initFirebase()) return [];
+      const snap = await db.collection('divisions').get();
+      const list = [];
+      snap.forEach(d => {
+        const v = d.data() || {};
+        const name = String(v.Division || '').trim();
+        const state = String(v.State || '').trim();
+        const region = String(v.Region || '').trim();
+        if (name && state && region) list.push({ id: d.id, Division: name, State: state, Region: region, Active: tmYes_(v.Active) });
+      });
+      return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State) || a.Division.localeCompare(b.Division));
+    });
+  }
+
+  function tmLocDocId_(parts) {
+    return parts.map(p => String(p || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'x').join('__').slice(0, 120);
+  }
+
+  function tmNormAppRole_(val) {
+    const raw = String(val || '').trim();
+    const hit = TM_APP_ROLES.find(x => x.toLowerCase() === raw.toLowerCase());
+    return hit || 'User';
+  }
+
+  function tmEmpInAreaScope_(viewer, targetEmp) {
+    if (!viewer || !targetEmp) return false;
+    const ar = tmNormAppRole_(viewer.AppRole);
+    if (ar === 'Region Admin') return !!viewer.Region && targetEmp.Region === viewer.Region;
+    if (ar === 'State Admin') return !!viewer.Region && !!viewer.State && targetEmp.Region === viewer.Region && targetEmp.State === viewer.State;
+    if (ar === 'Division Admin') return !!viewer.Region && !!viewer.State && !!viewer.Division && targetEmp.Region === viewer.Region && targetEmp.State === viewer.State && targetEmp.Division === viewer.Division;
+    return false;
+  }
+
+  function tmTaskInAreaScope_(access, task) {
+    if (!access || !task) return false;
+    if (access.appRole === 'Region Admin') return !!access.region && String(task.Region || '') === access.region;
+    if (access.appRole === 'State Admin') return !!access.region && !!access.state && String(task.Region || '') === access.region && String(task.State || '') === access.state;
+    if (access.appRole === 'Division Admin') return !!access.region && !!access.state && !!access.division && String(task.Region || '') === access.region && String(task.State || '') === access.state && String(task.Division || '') === access.division;
+    return false;
   }
 
   async function tmHierarchy_() {
@@ -392,8 +453,10 @@
           EmpName: String(e.EmpName || '').trim(),
           Nazim: String(e.Nazim || '').trim(),
           Division: String(e.Division || '').trim(),
+          State: String(e.State || '').trim(),
           Region: String(e.Region || '').trim(),
           Role: String(e.Role || '').trim(),
+          AppRole: tmNormAppRole_(e.AppRole),
           Email: String(e.Email || '').trim(),
           AuthEmail: String(e.AuthEmail || '').trim(),
           AuthUid: String(e.AuthUid || '').trim(),
@@ -450,8 +513,21 @@
     const hier = await tmHierarchy_();
     const admin = user.Role === 'Admin' || user.Role === 'System Admin' || !!r.IsAdmin;
     const headOffice = !!r.IsHeadOffice || admin;
+    const appRole = tmNormAppRole_(user.AppRole);
+    const areaAdmin = !admin && !headOffice && appRole !== 'User';
     const sub = new Set(Object.keys(tmSubtreeFrom_(hier.children, user.EmpCode, false)));
-    return { code: String(user.EmpCode), admin, headOffice, level: Number(r.Level) || 0, sub };
+    return {
+      code: String(user.EmpCode),
+      admin,
+      headOffice,
+      appRole,
+      areaAdmin,
+      region: String(user.Region || ''),
+      state: String(user.State || ''),
+      division: String(user.Division || ''),
+      level: Number(r.Level) || 0,
+      sub
+    };
   }
 
   function getWatcherCodes_(assignedTo, assignedBy, hier) {
@@ -478,9 +554,11 @@
     );
     privilegedRoles.add('Admin');
     privilegedRoles.add('System Admin');
+    const targetEmp = hier.byCode[String(assignedTo)] || {};
     Object.keys(hier.byCode).forEach(c => {
       const e = hier.byCode[c];
-      if (e.Active === 'Y' && privilegedRoles.has(e.Role)) codes.add(c);
+      if (e.Active !== 'Y') return;
+      if (privilegedRoles.has(e.Role) || tmEmpInAreaScope_(e, targetEmp)) codes.add(c);
     });
     return Array.from(codes);
   }
@@ -496,11 +574,11 @@
     return map;
   }
 
-  // Exact permission rules matching Appscript_Backend.gs
+  // Exact permission rules matching Appscript_Backend.gs + Area Admin visibility
   function tmCanSee_(a, t) {
     if (a.admin || a.headOffice) return true;
     const to = String(t.AssignedTo || ''), by = String(t.AssignedBy || '');
-    return to === a.code || by === a.code || a.sub.has(to);
+    return to === a.code || by === a.code || a.sub.has(to) || tmTaskInAreaScope_(a, t);
   }
 
   function tmCanUpdate_(a, t) {
@@ -543,9 +621,14 @@
     const errs = [];
     const rolesList = await tmRoles_();
     const regionsList = await tmRegions_();
+    const statesList = await tmStates_();
+    const divisionsList = await tmDivisions_();
     const activeRoles = new Set(rolesList.filter(r => r.Active).map(r => r.Role));
     const activeRegions = new Set(regionsList.filter(r => r.Active).map(r => r.Region));
+    const activeStates = statesList.filter(s => s.Active);
+    const activeDivisions = divisionsList.filter(d => d.Active);
 
+    const appRole = tmNormAppRole_(p.AppRole);
     const final = {};
     Object.keys(existingByCode).forEach(c => {
       const e = existingByCode[c];
@@ -566,7 +649,25 @@
     else if (!/^[A-Za-z0-9._-]{1,30}$/.test(p.EmpCode)) errs.push('Employee code may only use letters, numbers, dot, dash and underscore.');
     if (!p.EmpName) errs.push('Full name is required.');
     if (!activeRoles.has(p.Role)) errs.push(`Role "${p.Role}" does not exist or is switched off.`);
+    if (p.AppRole && TM_APP_ROLES.indexOf(appRole) < 0) errs.push(`App Role "${p.AppRole}" is invalid.`);
     if (!activeRegions.has(p.Region)) errs.push(`Region "${p.Region}" does not exist or is switched off.`);
+
+    const statesInRegion = activeStates.filter(s => s.Region === p.Region);
+    if (appRole === 'State Admin' || appRole === 'Division Admin') {
+      if (!p.State) errs.push(`State is required for ${appRole}.`);
+    }
+    if (p.State && statesInRegion.length && !statesInRegion.some(s => s.State === p.State)) {
+      if (!old || old.State !== p.State) errs.push(`State "${p.State}" does not belong to Region "${p.Region}".`);
+    }
+
+    const divsInState = activeDivisions.filter(d => d.Region === p.Region && d.State === p.State);
+    if (appRole === 'Division Admin' && !p.Division) {
+      errs.push('Division is required for Division Admin.');
+    }
+    if (p.Division && divsInState.length && !divsInState.some(d => d.Division === p.Division)) {
+      if (!old || old.Division !== p.Division) errs.push(`Division "${p.Division}" does not belong to State "${p.State}".`);
+    }
+
     if (!tmIsEmail_(p.Email)) errs.push('Email address is not valid.');
     if (p.Nazim && p.Nazim === p.EmpCode) errs.push('A person cannot be their own manager (Nazim).');
     if (p.Nazim && !final[p.Nazim]) errs.push(`Manager code "${p.Nazim}" was not found.`);
@@ -696,6 +797,7 @@
       SelfAssigned: selfAssigned,
       GivenByNazim: !selfAssigned && String(assignedTo.Nazim || '') === String(t.AssignedBy),
       Region: String(t.Region || ''),
+      State: String(t.State || assignedTo.State || ''),
       Division: String(t.Division || ''),
       Due: t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '',
       Status: status,
@@ -730,6 +832,13 @@
         db.collection('tasks').where('AssignedTo', '==', access.code).get(),
         db.collection('tasks').where('AssignedBy', '==', access.code).get()
       ];
+      if (access.appRole === 'Region Admin' && access.region) {
+        queries.push(db.collection('tasks').where('Region', '==', access.region).get());
+      } else if (access.appRole === 'State Admin' && access.region && access.state) {
+        queries.push(db.collection('tasks').where('Region', '==', access.region).where('State', '==', access.state).get());
+      } else if (access.appRole === 'Division Admin' && access.region && access.state && access.division) {
+        queries.push(db.collection('tasks').where('Region', '==', access.region).where('State', '==', access.state).where('Division', '==', access.division).get());
+      }
       const snaps = await Promise.all(queries);
       snaps.forEach(s => s.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); }));
     }
@@ -1155,6 +1264,8 @@
       const isAdmin = me.Role === 'Admin' || me.Role === 'System Admin' || !!r.IsAdmin;
       const isHeadOffice = !!r.IsHeadOffice || isAdmin;
       const isNazim = (hier.children[me.EmpCode] || []).length > 0;
+      const appRole = tmNormAppRole_(me.AppRole);
+      const isAreaAdmin = !isAdmin && !isHeadOffice && appRole !== 'User';
 
       const out = {
         today: tmDayKey_(new Date()),
@@ -1163,7 +1274,9 @@
           EmpCode: me.EmpCode,
           EmpName: me.EmpName,
           Role: me.Role,
+          AppRole: appRole,
           Region: me.Region,
+          State: me.State || '',
           Division: me.Division,
           Email: me.Email,
           Nazim: me.Nazim,
@@ -1171,7 +1284,8 @@
           isAdmin,
           isHeadOffice,
           isNazim,
-          hasTeam: isAdmin || isHeadOffice || isNazim,
+          isAreaAdmin,
+          hasTeam: isAdmin || isHeadOffice || isNazim || isAreaAdmin,
           vaultUnlocked: window.CryptoVault ? window.CryptoVault.isUnlocked(me.EmpCode) : false
         },
         mustChangePassword: false
@@ -1179,7 +1293,11 @@
 
       const codes = (isAdmin || isHeadOffice)
         ? Object.keys(hier.byCode).filter(c => hier.byCode[c].Active === 'Y')
-        : [access.code].concat(Array.from(access.sub));
+        : Array.from(new Set(
+            [access.code]
+              .concat(Array.from(access.sub))
+              .concat(Object.keys(hier.byCode).filter(c => hier.byCode[c].Active === 'Y' && tmEmpInAreaScope_(me, hier.byCode[c])))
+          ));
 
       const divisions = {}, people = [];
       codes.forEach(c => {
@@ -1187,16 +1305,21 @@
         if (!e || e.Active !== 'Y') return;
         if (e.Division) divisions[e.Division] = true;
         const canAssign = isAdmin || c === access.code || access.sub.has(c);
-        people.push({ c: e.EmpCode, n: e.EmpName, r: e.Role, g: e.Region, d: e.Division, a: canAssign ? 1 : 0 });
+        people.push({ c: e.EmpCode, n: e.EmpName, r: e.Role, ar: e.AppRole || 'User', g: e.Region, s: e.State || '', d: e.Division, a: canAssign ? 1 : 0 });
       });
       people.sort((x, y) => x.n.localeCompare(y.n));
       out.people = people;
 
-      const regionsList = await tmRegions_();
+      const [regionsList, statesList, divisionsList] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
+      const activeDivs = divisionsList.filter(x => x.Active);
+      const mergedDivNames = Array.from(new Set(activeDivs.map(x => x.Division).concat(Object.keys(divisions)))).sort();
       out.lists = {
         regions: regionsList.filter(x => x.Active).map(x => x.Region),
-        divisions: Object.keys(divisions).sort(),
+        states: statesList.filter(x => x.Active).map(x => ({ State: x.State, Region: x.Region })),
+        divisionsList: activeDivs.map(x => ({ Division: x.Division, State: x.State, Region: x.Region })),
+        divisions: mergedDivNames,
         roles: roles.filter(x => x.Active).map(x => x.Role),
+        appRoles: TM_APP_ROLES,
         statuses: TM_STATUSES
       };
       if (!out.lists.regions.length) out.lists.regions = TM_REGIONS;
@@ -1225,8 +1348,8 @@
       const byCode = hier.byCode;
       const scope = filters.scope === 'team' ? 'team' : 'mine';
 
-      if (scope === 'team' && !access.admin && !access.headOffice && (hier.children[user.EmpCode] || []).length === 0) {
-        throw new Error('Team task access is limited to Nazim users.');
+      if (scope === 'team' && !access.admin && !access.headOffice && !access.areaAdmin && (hier.children[user.EmpCode] || []).length === 0) {
+        throw new Error('Team task access is limited to Nazim and Area Admin users.');
       }
 
       const allTasks = await tmFetchVisibleTasks_(access, scope);
@@ -1239,9 +1362,11 @@
         if (!tmCanSee_(access, t)) return;
         const mine = String(t.AssignedTo) === access.code;
         if (scope === 'mine' ? !mine : mine) return;
-        if (filters.region && String(t.Region) !== filters.region) return;
-        if (filters.division && String(t.Division) !== filters.division) return;
-        if (filters.role && String((byCode[String(t.AssignedTo)] || {}).Role) !== filters.role) return;
+        const empObj = byCode[String(t.AssignedTo)] || {};
+        if (filters.region && String(t.Region || empObj.Region || '') !== filters.region) return;
+        if (filters.state && String(t.State || empObj.State || '') !== filters.state) return;
+        if (filters.division && String(t.Division || empObj.Division || '') !== filters.division) return;
+        if (filters.role && String(empObj.Role || '') !== filters.role) return;
         if (emp) {
           const e = byCode[String(t.AssignedTo)] || {};
           if (String(t.AssignedTo).toLowerCase() !== emp && String(e.EmpName || '').toLowerCase().indexOf(emp) < 0) return;
@@ -1467,6 +1592,7 @@
             AssignedBy: user.EmpCode,
             AssignedTo: sp.target,
             Region: emp.Region || '',
+            State: emp.State || '',
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
             Status: 'Pending',
@@ -1487,6 +1613,7 @@
             AssignedBy: user.EmpCode,
             AssignedTo: sp.target,
             Region: emp.Region || '',
+            State: emp.State || '',
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
             Status: 'Pending',
@@ -1858,8 +1985,8 @@
       const access = await tmAccess_(user);
       const hier = await tmHierarchy_();
       const isNazim = (hier.children[user.EmpCode] || []).length > 0;
-      if (!access.admin && !access.headOffice && !isNazim) {
-        throw new Error('Dashboard access is limited to Nazim users.');
+      if (!access.admin && !access.headOffice && !access.areaAdmin && !isNazim) {
+        throw new Error('Dashboard access is limited to Nazim and Area Admin users.');
       }
 
       const f = filters || {};
@@ -1876,7 +2003,9 @@
 
       const employeeCodes = new Set((access.admin || access.headOffice)
         ? Object.keys(hier.byCode)
-        : [String(user.EmpCode)].concat(Array.from(access.sub)));
+        : [String(user.EmpCode)]
+            .concat(Array.from(access.sub))
+            .concat(Object.keys(hier.byCode).filter(c => hier.byCode[c].Active === 'Y' && tmEmpInAreaScope_(user, hier.byCode[c]))));
       visible.forEach(x => { if (x.employee.EmpCode) employeeCodes.add(String(x.employee.EmpCode)); });
       const accessiblePeople = Array.from(employeeCodes).map(c => hier.byCode[c]).filter(e => e && e.Active === 'Y');
 
@@ -1901,8 +2030,20 @@
         if (manager.EmpCode) managerCodes.add(String(manager.EmpCode));
       });
 
+      const [statesMaster, divisionsMaster] = await Promise.all([tmStates_(), tmDivisions_()]);
+      const statePairs = new Map();
+      statesMaster.filter(s => s.Active).forEach(s => statePairs.set(s.Region + '|' + s.State, { State: s.State, Region: s.Region }));
+      accessiblePeople.forEach(e => { if (e.Region && e.State) statePairs.set(e.Region + '|' + e.State, { State: e.State, Region: e.Region }); });
+
+      const divPairs = new Map();
+      divisionsMaster.filter(d => d.Active).forEach(d => divPairs.set(d.Region + '|' + d.State + '|' + d.Division, { Division: d.Division, State: d.State, Region: d.Region }));
+      accessiblePeople.forEach(e => { if (e.Region && e.Division) divPairs.set(e.Region + '|' + (e.State || '') + '|' + e.Division, { Division: e.Division, State: e.State || '', Region: e.Region }); });
+
       const allOptions = {
         locations: Array.from(new Set(accessiblePeople.map(e => String(e.Division || '')).filter(Boolean))).sort(),
+        states: Array.from(new Set(accessiblePeople.map(e => String(e.State || '')).filter(Boolean))).sort(),
+        stateTree: Array.from(statePairs.values()).sort((a, b) => a.State.localeCompare(b.State)),
+        divisionTree: Array.from(divPairs.values()).sort((a, b) => a.Division.localeCompare(b.Division)),
         regions: Array.from(new Set(accessiblePeople.map(e => String(e.Region || '')).filter(Boolean))).sort(),
         roles: Array.from(new Set(accessiblePeople.map(e => String(e.Role || '')).filter(Boolean))).sort(),
         employees: accessiblePeople.map(e => ({ code: String(e.EmpCode), name: String(e.EmpName || '') })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -1910,11 +2051,24 @@
       };
 
       const canFilterAll = access.admin || access.headOffice;
-      const options = canFilterAll ? allOptions : { employees: allOptions.employees };
+      const canAreaFilter = canFilterAll || access.areaAdmin;
+      const options = canFilterAll
+        ? allOptions
+        : access.areaAdmin
+          ? {
+              regions: access.appRole === 'Region Admin' ? [] : [],
+              states: access.appRole === 'Region Admin' ? allOptions.states : [],
+              stateTree: access.appRole === 'Region Admin' ? allOptions.stateTree : [],
+              locations: access.appRole !== 'Division Admin' ? allOptions.locations : [],
+              divisionTree: access.appRole !== 'Division Admin' ? allOptions.divisionTree : [],
+              roles: allOptions.roles,
+              employees: allOptions.employees
+            }
+          : { employees: allOptions.employees };
       const permittedCodes = new Set(accessiblePeople.map(e => String(e.EmpCode)));
 
       if (f.employee && !permittedCodes.has(String(f.employee))) throw new Error('That employee is outside your dashboard access.');
-      if (!canFilterAll && (f.location || f.region || f.role || f.nazim)) {
+      if (!canAreaFilter && (f.location || f.state || f.region || f.role || f.nazim)) {
         throw new Error('Those dashboard filters are available to administrators only.');
       }
       if (canFilterAll && f.nazim && !managerCodes.has(String(f.nazim))) {
@@ -1924,16 +2078,17 @@
       const nazimScope = canFilterAll && f.nazim ? tmSubtreeFrom_(hier.children, String(f.nazim), true) : null;
       const selected = visible.filter(x => {
         const e = x.employee;
-        if (canFilterAll && f.location && String(e.Division || x.task.Division || '') !== String(f.location)) return false;
+        if (canAreaFilter && f.location && String(e.Division || x.task.Division || '') !== String(f.location)) return false;
+        if (canAreaFilter && f.state && String(e.State || x.task.State || '') !== String(f.state)) return false;
         if (canFilterAll && f.region && String(e.Region || x.task.Region || '') !== String(f.region)) return false;
-        if (canFilterAll && f.role && String(e.Role || '') !== String(f.role)) return false;
+        if (canAreaFilter && f.role && String(e.Role || '') !== String(f.role)) return false;
         if (f.employee && String(x.task.AssignedTo) !== String(f.employee)) return false;
         if (canFilterAll && nazimScope && !nazimScope[String(x.task.AssignedTo)]) return false;
         return true;
       });
 
       const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, AwaitingConfirm: 0, Total: selected.length };
-      const byRegion = {}, byLocation = {}, byRole = {}, byEmployee = {}, byNazim = {};
+      const byRegion = {}, byState = {}, byLocation = {}, byRole = {}, byEmployee = {}, byNazim = {};
       const byDue = { 'Due today': 0, 'Due within 7 days': 0, 'Due later': 0, 'No due date': 0 };
       const byCreated = {}, byCompleted = {};
       const todayKey = tmDayKey_(new Date());
@@ -2016,6 +2171,7 @@
         }
 
         bump(byRegion, String(e.Region || t.Region || 'Unassigned'), x);
+        bump(byState, String(e.State || t.State || 'Unassigned'), x);
         bump(byLocation, String(e.Division || t.Division || 'Unassigned'), x);
         bump(byRole, String(e.Role || 'Unassigned'), x);
 
@@ -2025,6 +2181,7 @@
         empObj.code = empKey;
         empObj.role = String(e.Role || '');
         empObj.region = String(e.Region || t.Region || '');
+        empObj.state = String(e.State || t.State || '');
         empObj.division = String(e.Division || t.Division || '');
 
         const mgrKey = String(n.EmpCode || 'Unassigned');
@@ -2073,7 +2230,8 @@
           managerTasks
         },
         byRegion: values(byRegion).slice(0, 12),
-        byLocation: values(byLocation).slice(0, 12),
+        byState: values(byState).slice(0, 20),
+        byLocation: values(byLocation).slice(0, 20),
         byRole: values(byRole).slice(0, 20),
         byEmployee: values(byEmployee).slice(0, 50),
         byNazim: canFilterAll ? values(byNazim).slice(0, 12) : [],
@@ -2570,16 +2728,19 @@
       const hier = await tmHierarchy_();
       const people = Object.values(hier.byCode).map(e => ({
         EmpCode: e.EmpCode, EmpName: e.EmpName, Nazim: e.Nazim, Division: e.Division,
-        Region: e.Region, Role: e.Role, Email: e.Email, Active: e.Active, LastLogin: tmStamp_(e.LastLogin)
+        State: e.State || '', Region: e.Region, Role: e.Role, AppRole: e.AppRole || 'User',
+        Email: e.Email, Active: e.Active, LastLogin: tmStamp_(e.LastLogin)
       })).sort((a, b) => a.EmpName.localeCompare(b.EmpName));
 
-      const roles = await tmRoles_();
-      const regions = await tmRegions_();
+      const [roles, regions, states, divisions] = await Promise.all([tmRoles_(), tmRegions_(), tmStates_(), tmDivisions_()]);
       return {
         ok: true,
         people,
         roles: roles.filter(x => x.Active).map(x => x.Role),
-        regions: regions.filter(x => x.Active).map(x => x.Region)
+        regions: regions.filter(x => x.Active).map(x => x.Region),
+        states: states.filter(x => x.Active).map(x => ({ State: x.State, Region: x.Region })),
+        divisions: divisions.filter(x => x.Active).map(x => ({ Division: x.Division, State: x.State, Region: x.Region })),
+        appRoles: TM_APP_ROLES
       };
     },
 
@@ -2602,8 +2763,10 @@
         EmpName: tmClip_(input.EmpName, 100),
         Nazim: tmClip_(input.Nazim, 30).toUpperCase(),
         Division: tmClip_(input.Division, 80),
+        State: tmClip_(input.State, 60),
         Region: tmClip_(input.Region, 60),
         Role: tmClip_(input.Role, 80),
+        AppRole: tmNormAppRole_(input.AppRole),
         Email: tmClip_(input.Email, 254),
         Password: String(input.Password == null ? '' : input.Password),
         Active: isNew ? 'Y' : (input.Active === undefined ? existing.Active : tmYN_(input.Active))
@@ -2626,8 +2789,10 @@
         EmpName: p.EmpName,
         Nazim: p.Nazim,
         Division: p.Division,
+        State: p.State,
         Region: p.Region,
         Role: p.Role,
+        AppRole: p.AppRole,
         Email: p.Email,
         AuthEmail: authEmail,
         Active: p.Active,
@@ -2670,8 +2835,8 @@
         await window.CryptoVault.provisionUserKey(db, code, p.Password).catch(() => {});
       }
 
-      // If Nazim changed on an existing employee, update WatcherCodes on their open tasks
-      if (existing && (existing.Nazim !== p.Nazim || existing.Region !== p.Region || existing.Division !== p.Division)) {
+      // If Nazim or location changed on an existing employee, update State/Region/Division & WatcherCodes on their open tasks
+      if (existing && (existing.Nazim !== p.Nazim || existing.Region !== p.Region || existing.State !== p.State || existing.Division !== p.Division)) {
         memoClear();
         const freshHier = await tmHierarchy_();
         const taskSnap = await db.collection('tasks').where('AssignedTo', '==', code).get();
@@ -2682,6 +2847,7 @@
           if (t.Status !== 'Completed') {
             batch.update(d.ref, {
               Region: p.Region,
+              State: p.State,
               Division: p.Division,
               WatcherCodes: getWatcherCodes_(code, t.AssignedBy, freshHier)
             });
@@ -2689,6 +2855,40 @@
           }
         });
         if (count) await batch.commit().catch(() => {});
+      }
+
+      // If this user is an active Area Admin, wrap open encrypted tasks in their area for them (best effort)
+      if (p.Active === 'Y' && p.AppRole !== 'User' && window.CryptoVault && window.CryptoVault.isUnlocked(user.EmpCode)) {
+        try {
+          const keySnap = await db.collection('userKeys').doc(code).get();
+          const targetJwk = keySnap.exists && keySnap.data().publicKeyJwk;
+          if (targetJwk) {
+            const q = p.AppRole === 'Region Admin'
+              ? db.collection('tasks').where('Region', '==', p.Region)
+              : p.AppRole === 'State Admin'
+                ? db.collection('tasks').where('Region', '==', p.Region).where('State', '==', p.State)
+                : db.collection('tasks').where('Region', '==', p.Region).where('State', '==', p.State).where('Division', '==', p.Division);
+            const tSnap = await q.get();
+            const kb = db.batch();
+            let kCnt = 0;
+            for (const d of tSnap.docs) {
+              const t = d.data();
+              if (!t.IsConfidential || !t.KeyEnvelopes || t.KeyEnvelopes[code]) continue;
+              try {
+                const dek = await window.CryptoVault.unwrapDekFromEnvelopes(t.KeyEnvelopes, user.EmpCode);
+                if (!dek) continue;
+                const wrapped = await window.CryptoVault.wrapDekForRecipients(dek, { [code]: targetJwk });
+                if (wrapped && wrapped[code]) {
+                  const nextEnv = Object.assign({}, t.KeyEnvelopes, { [code]: wrapped[code] });
+                  const nextAllowed = Array.from(new Set((t.AllowedCodes || []).concat([code])));
+                  kb.update(d.ref, { KeyEnvelopes: nextEnv, AllowedCodes: nextAllowed });
+                  kCnt++;
+                }
+              } catch (ignore) {}
+            }
+            if (kCnt) await kb.commit().catch(() => {});
+          }
+        } catch (ignore) {}
       }
 
       memoClear();
@@ -2783,16 +2983,78 @@
       return { ok: true };
     },
 
-    // 14b. Master Bulk Import (People, Roles, Task Templates)
+    // 14a. Locations Hierarchy (India -> Region -> State -> Division)
+    apiAdminLocations: async function (token) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      const [regions, states, divisions] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
+      return { ok: true, regions, states, divisions };
+    },
+
+    apiSaveLocation: async function (token, kind, input) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      input = input || {};
+      const active = input.Active === undefined ? true : tmYes_(input.Active);
+      const now = new Date();
+
+      if (kind === 'region') {
+        const reg = tmClip_(input.Region, 60);
+        if (!reg) throw new Error('Region name is required.');
+        const id = input.id || reg;
+        await db.collection('regions').doc(id).set({ Region: reg, Country: 'India', Active: active, UpdatedAt: now }, { merge: true });
+        memoClear();
+        await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'region:' + reg, { active });
+        return { ok: true };
+      }
+
+      if (kind === 'state') {
+        const reg = tmClip_(input.Region, 60);
+        const st = tmClip_(input.State, 60);
+        if (!reg) throw new Error('Select a parent Region first.');
+        if (!st) throw new Error('State name is required.');
+        const regions = await tmRegions_();
+        if (!regions.some(r => r.Region === reg)) throw new Error(`Region "${reg}" does not exist.`);
+        const id = input.id || tmLocDocId_([reg, st]);
+        await db.collection('states').doc(id).set({ Region: reg, State: st, Active: active, UpdatedAt: now }, { merge: true });
+        memoClear();
+        await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'state:' + st, { region: reg, active });
+        return { ok: true };
+      }
+
+      if (kind === 'division') {
+        const reg = tmClip_(input.Region, 60);
+        const st = tmClip_(input.State, 60);
+        const div = tmClip_(input.Division, 80);
+        if (!reg) throw new Error('Select a parent Region first.');
+        if (!st) throw new Error('Select a parent State first.');
+        if (!div) throw new Error('Division name is required.');
+        const states = await tmStates_();
+        if (!states.some(s => s.Region === reg && s.State === st)) throw new Error(`State "${st}" under Region "${reg}" does not exist.`);
+        const id = input.id || tmLocDocId_([reg, st, div]);
+        await db.collection('divisions').doc(id).set({ Region: reg, State: st, Division: div, Active: active, UpdatedAt: now }, { merge: true });
+        memoClear();
+        await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'division:' + div, { region: reg, state: st, active });
+        return { ok: true };
+      }
+
+      throw new Error('Unknown location type.');
+    },
+
+    // 14b. Master Bulk Import (People, Roles, Task Templates, Locations)
     apiImportMeta: async function (token) {
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const [cfg, hier, roles, regions, tpls] = await Promise.all([
+      const [cfg, hier, roles, regions, states, divisions, tpls] = await Promise.all([
         tmConfig_(),
         tmHierarchy_(),
         tmRoles_(),
         tmRegions_(),
+        tmStates_(),
+        tmDivisions_(),
         tmTemplates_()
       ]);
       return {
@@ -2800,12 +3062,107 @@
         minPasswordLength: Math.min(Number(cfg.MIN_PASSWORD_LENGTH) || 8, 6),
         roles: roles.filter(r => r.Active).map(r => r.Role),
         allRoleNames: roles.map(r => r.Role),
+        appRoles: TM_APP_ROLES,
         regions: regions.filter(r => r.Active).map(r => r.Region),
+        states: states.filter(s => s.Active).map(s => ({ State: s.State, Region: s.Region })),
+        divisions: divisions.filter(d => d.Active).map(d => ({ Division: d.Division, State: d.State, Region: d.Region })),
         existingCodes: Object.keys(hier.byCode),
         existingEmails: Object.values(hier.byCode).map(e => String(e.Email || '').toLowerCase()).filter(Boolean),
         existingTemplateTitles: tpls.map(t => t.title.toLowerCase()),
         peopleCount: Object.keys(hier.byCode).length
       };
+    },
+
+    apiImportLocations: async function (token, rows) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      if (!Array.isArray(rows) || !rows.length) throw new Error('No location rows provided.');
+      if (rows.length > 300) throw new Error('You can import at most 300 location rows at once.');
+
+      const [regions, states, divisions] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
+      const regSet = new Set(regions.map(r => r.Region.toLowerCase()));
+      const regNameByLow = {};
+      regions.forEach(r => { regNameByLow[r.Region.toLowerCase()] = r.Region; });
+      const stateSet = new Set(states.map(s => (s.Region + '|' + s.State).toLowerCase()));
+      const stateNameByLow = {};
+      states.forEach(s => { stateNameByLow[(s.Region + '|' + s.State).toLowerCase()] = s.State; });
+      const divSet = new Set(divisions.map(d => (d.Region + '|' + d.State + '|' + d.Division).toLowerCase()));
+
+      const now = new Date();
+      const writes = [];
+      const results = [];
+      let created = 0, skipped = 0, failed = 0;
+
+      rows.forEach((raw, idx) => {
+        const rowNum = Number(raw && raw._row) || (idx + 2);
+        const regIn = tmClip_(raw && raw.Region, 60);
+        const stIn = tmClip_(raw && raw.State, 60);
+        const divIn = tmClip_(raw && raw.Division, 80);
+        const active = raw.Active === undefined || raw.Active === '' ? true : tmYes_(raw.Active);
+
+        if (!regIn) {
+          failed++;
+          results.push({ row: rowNum, key: '(blank)', status: 'FAILED', message: 'Region is required.' });
+          return;
+        }
+        if (divIn && !stIn) {
+          failed++;
+          results.push({ row: rowNum, key: divIn, status: 'FAILED', message: 'State is required when specifying a Division.' });
+          return;
+        }
+
+        let createdSomething = false;
+        const regLow = regIn.toLowerCase();
+        const regName = regNameByLow[regLow] || regIn;
+        if (!regSet.has(regLow)) {
+          regSet.add(regLow);
+          regNameByLow[regLow] = regName;
+          writes.push({ ref: db.collection('regions').doc(regName), data: { Region: regName, Country: 'India', Active: active, UpdatedAt: now } });
+          createdSomething = true;
+        }
+
+        let stName = stIn;
+        if (stIn) {
+          const stLow = (regName + '|' + stIn).toLowerCase();
+          stName = stateNameByLow[stLow] || stIn;
+          if (!stateSet.has(stLow)) {
+            stateSet.add(stLow);
+            stateNameByLow[stLow] = stName;
+            writes.push({ ref: db.collection('states').doc(tmLocDocId_([regName, stName])), data: { Region: regName, State: stName, Active: active, UpdatedAt: now } });
+            createdSomething = true;
+          }
+        }
+
+        if (divIn) {
+          const divLow = (regName + '|' + stName + '|' + divIn).toLowerCase();
+          if (!divSet.has(divLow)) {
+            divSet.add(divLow);
+            writes.push({ ref: db.collection('divisions').doc(tmLocDocId_([regName, stName, divIn])), data: { Region: regName, State: stName, Division: divIn, Active: active, UpdatedAt: now } });
+            createdSomething = true;
+          }
+        }
+
+        const label = [regName, stName, divIn].filter(Boolean).join(' > ');
+        if (createdSomething) {
+          created++;
+          results.push({ row: rowNum, key: label, status: 'CREATED', message: 'Location hierarchy added.' });
+        } else {
+          skipped++;
+          results.push({ row: rowNum, key: label, status: 'SKIPPED', message: 'Already exists.' });
+        }
+      });
+
+      for (let i = 0; i < writes.length; i += 450) {
+        const b = db.batch();
+        writes.slice(i, i + 450).forEach(w => b.set(w.ref, w.data, { merge: true }));
+        await b.commit();
+      }
+      if (writes.length) {
+        memoClear();
+        await tmAudit_(user.EmpCode, 'LOCATIONS_BULK_IMPORT', 'locations', { writes: writes.length, created });
+      }
+      return { ok: true, created, skipped, failed, results };
     },
 
     apiImportRoles: async function (token, rows) {
@@ -3003,8 +3360,10 @@
           EmpName: tmClip_(raw.EmpName, 100),
           Nazim: tmClip_(raw.Nazim, 30).toUpperCase(),
           Division: tmClip_(raw.Division, 80),
+          State: tmClip_(raw.State, 60),
           Region: tmClip_(raw.Region, 60),
           Role: tmClip_(raw.Role, 80),
+          AppRole: tmNormAppRole_(raw.AppRole),
           Email: email,
           Password: String(raw.Password == null ? '' : raw.Password),
           Active: 'Y'
@@ -3074,8 +3433,10 @@
             EmpName: p.EmpName,
             Nazim: p.Nazim,
             Division: p.Division,
+            State: p.State,
             Region: p.Region,
             Role: p.Role,
+            AppRole: p.AppRole,
             Email: p.Email,
             AuthEmail: authEmail,
             AuthUid: authUid,
