@@ -853,7 +853,10 @@ async function confirmAckTasks(ids, btn) {
       S.ackTasks = (S.ackTasks || []).filter(t => !doneSet.has(t.TaskID));
       renderAckGate();
       toast((r.count || clean.length) === 1 ? 'Task confirmed and moved to In Progress.' : `${r.count || clean.length} tasks confirmed and moved to In Progress.`);
-      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      const ackNow = new Date().toISOString();
+      clean.forEach(id => patchLocalTask({ TaskID: id, Status: 'In Progress', NeedsAck: false, ReceivedAt: ackNow }, { skipRender: true }));
+      if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+      syncOpenTask();
       if (S.view === 'dashboard') { delete S.dashFilters.offset; loadDashboard(); }
     } catch (e) { if (!e.auth) toast(e.message, true); }
   });
@@ -901,7 +904,7 @@ async function quickAdd(form) {
       const dd = toDate(todayKey()); dd.setDate(dd.getDate() + (S.qdue || 0));
       const r = await api('apiCreateTask', S.token, { tasks: [v], description: '', dueDate: keyOf(dd), assignedTo: [S.boot.user.EmpCode], notify: false });
       i.value = ''; toast('Task added.');
-      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      if (!insertLocalTasks(r.createdTasks)) await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
       setTimeout(() => { const el = $('.row[data-id="' + CSS.escape(r.taskId) + '"]'); if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }, 80);
       i.focus();
     } catch (e) { if (!e.auth) toast(e.message, true); }
@@ -1721,6 +1724,7 @@ function renderTasksShell(scope) {
       <select data-ch="filter" data-k="state" id="flt-state" aria-label="State">${opt(stateOpts, f.state, 'All states')}</select>
       <select data-ch="filter" data-k="division" id="flt-division" aria-label="Division">${opt(divOpts, f.division, 'All divisions')}</select>
       <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles || [], f.role, 'All roles')}</select>`}
+      <button type="button" class="btn sm" data-act="refreshlist" data-busy="Refreshing" title="Fetch latest tasks from server">↻ Refresh</button>
     </div>
     <div id="bulkbar"></div><div id="list"></div><div id="more" class="more-wrap"></div>`);
   renderChips(scope); renderList(scope);
@@ -1787,21 +1791,128 @@ async function loadList(scope, opt) {
 }
 const findTask = id => { for (const k of ['mine', 'team']) { const d = S.data[k]; const t = d && d.tasks.find(x => x.TaskID === id); if (t) return t; } const rows = S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks || []; const dt = rows.find(x => x.TaskID === id); if (dt) return dt; return S.openTask && S.openTask.TaskID === id ? S.openTask : null; };
 function updateRow(t) { const el = $('.row[data-id="' + CSS.escape(t.TaskID) + '"]'); if (!el) return; const scope = S.view === 'team' ? 'team' : 'mine'; const tmp = document.createElement('div'); mount(tmp, taskRow(t, scope)); el.replaceWith(tmp.firstElementChild); }
+function taskMatchesFilter(t, f) {
+  if (!f) return true;
+  if (f.status && t.Status !== f.status) return false;
+  if (f.overdue && !t.Overdue) return false;
+  if (f.region && t.Region !== f.region) return false;
+  if (f.state && t.State !== f.state) return false;
+  if (f.division && t.Division !== f.division) return false;
+  if (f.employee) {
+    const q = String(f.employee).toLowerCase();
+    const hit = String(t.AssignedTo || '').toLowerCase().includes(q) || String(t.AssignedToName || '').toLowerCase().includes(q);
+    if (!hit) return false;
+  }
+  if (f.search) {
+    const s = String(f.search).toLowerCase();
+    const hay = [t.Title, t.Description, t.TaskID, t.AssignedToName, t.AssignedByName].join(' ').toLowerCase();
+    if (!hay.includes(s)) return false;
+  }
+  return true;
+}
+function adjustCacheCounts(d, prevStatus, prevOverdue, nextStatus, nextOverdue) {
+  if (!d || !d.counts) return;
+  if (prevStatus == null && nextStatus != null) d.counts.All = (d.counts.All || 0) + 1;
+  else if (prevStatus != null && nextStatus == null) d.counts.All = Math.max(0, (d.counts.All || 0) - 1);
+  if (prevStatus && prevStatus !== nextStatus && d.counts[prevStatus] != null) d.counts[prevStatus] = Math.max(0, d.counts[prevStatus] - 1);
+  if (nextStatus && prevStatus !== nextStatus) d.counts[nextStatus] = (d.counts[nextStatus] || 0) + 1;
+  if (prevOverdue && !nextOverdue && d.counts.Overdue != null) d.counts.Overdue = Math.max(0, d.counts.Overdue - 1);
+  else if (!prevOverdue && nextOverdue) d.counts.Overdue = (d.counts.Overdue || 0) + 1;
+}
 function applyStatus(t, status) {
-  const prev = t.Status;
-  t.Status = status;
-  const wasOverdue = !!t.Overdue;
-  t.Overdue = status !== 'Completed' && !!t.Due && dayDiff(t.Due) < 0;
+  const prev = t.Status, wasOverdue = !!t.Overdue;
+  const nextOverdue = status !== 'Completed' && !!t.Due && dayDiff(t.Due) < 0;
   for (const k of ['mine', 'team']) {
     const d = S.data[k];
-    if (d && d.counts && d.tasks && d.tasks.some(x => x.TaskID === t.TaskID)) {
-      if (prev && d.counts[prev] != null) d.counts[prev] = Math.max(0, d.counts[prev] - 1);
-      if (status && d.counts[status] != null) d.counts[status] = (d.counts[status] || 0) + 1;
-      if (wasOverdue && !t.Overdue && d.counts.Overdue != null) d.counts.Overdue = Math.max(0, d.counts.Overdue - 1);
-      else if (!wasOverdue && t.Overdue && d.counts.Overdue != null) d.counts.Overdue = (d.counts.Overdue || 0) + 1;
+    const hit = d && d.tasks && d.tasks.find(x => x.TaskID === t.TaskID);
+    if (hit) {
+      adjustCacheCounts(d, hit.Status, !!hit.Overdue, status, nextOverdue);
+      hit.Status = status; hit.Overdue = nextOverdue;
+      S.fresh[k] = Date.now();
     }
   }
+  t.Status = status; t.Overdue = nextOverdue;
+  const dt = S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks && S.dashboard.drilldown.tasks.find(x => x.TaskID === t.TaskID);
+  if (dt) { dt.Status = status; dt.Overdue = nextOverdue; }
+  if (S.openTask && S.openTask.TaskID === t.TaskID) { S.openTask.Status = status; S.openTask.Overdue = nextOverdue; }
   if (S.view === 'mine' || S.view === 'team') renderChips(S.view);
+}
+function patchLocalTask(patch, opt) {
+  if (!patch || !patch.TaskID) return;
+  const id = patch.TaskID;
+  for (const k of ['mine', 'team']) {
+    const d = S.data[k]; if (!d || !Array.isArray(d.tasks)) continue;
+    const idx = d.tasks.findIndex(x => x.TaskID === id);
+    if (idx >= 0) {
+      const cur = d.tasks[idx];
+      if (k === 'mine' && patch.Mine === false) {
+        d.tasks.splice(idx, 1);
+        d.total = Math.max(0, (d.total || 1) - 1);
+        adjustCacheCounts(d, cur.Status, !!cur.Overdue, null, false);
+      } else {
+        const prevS = cur.Status, prevO = !!cur.Overdue;
+        const merged = Object.assign({}, cur, patch);
+        merged.Overdue = patch.Overdue !== undefined ? !!patch.Overdue : (merged.Status !== 'Completed' && !!merged.Due && dayDiff(merged.Due) < 0);
+        adjustCacheCounts(d, prevS, prevO, merged.Status, merged.Overdue);
+        d.tasks[idx] = merged;
+      }
+      S.fresh[k] = Date.now();
+    } else if (k === 'mine' && patch.Mine === true && patch.Title) {
+      const added = Object.assign({}, patch);
+      adjustCacheCounts(d, null, false, added.Status, !!added.Overdue);
+      if (taskMatchesFilter(added, S.filters[k])) { d.tasks.unshift(added); d.total = (d.total || 0) + 1; }
+      S.fresh[k] = Date.now();
+    }
+  }
+  const dd = S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks;
+  if (dd) { const i = dd.findIndex(x => x.TaskID === id); if (i >= 0) dd[i] = Object.assign({}, dd[i], patch); }
+  if (S.openTask && S.openTask.TaskID === id) {
+    S.openTask = Object.assign({}, S.openTask, patch);
+    S.openTask.Overdue = patch.Overdue !== undefined ? !!patch.Overdue : (S.openTask.Status !== 'Completed' && !!S.openTask.Due && dayDiff(S.openTask.Due) < 0);
+  }
+  if (!opt || !opt.skipRender) {
+    if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+    syncOpenTask();
+  }
+}
+function insertLocalTasks(list) {
+  if (!Array.isArray(list) || !list.length) return false;
+  for (const k of ['mine', 'team']) {
+    const d = S.data[k]; if (!d || !Array.isArray(d.tasks)) continue;
+    const seen = new Set(d.tasks.map(x => x.TaskID));
+    const toPrepend = [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const t = list[i];
+      if (!t || !t.TaskID || seen.has(t.TaskID)) continue;
+      if (k === 'mine' && !t.Mine) continue;
+      seen.add(t.TaskID);
+      adjustCacheCounts(d, null, false, t.Status, !!t.Overdue);
+      if (taskMatchesFilter(t, S.filters[k])) { toPrepend.push(t); d.total = (d.total || 0) + 1; }
+    }
+    if (toPrepend.length) d.tasks = toPrepend.reverse().concat(d.tasks);
+    S.fresh[k] = Date.now();
+  }
+  if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+  return true;
+}
+function removeLocalTask(id) {
+  if (!id) return;
+  for (const k of ['mine', 'team']) {
+    const d = S.data[k]; if (!d || !Array.isArray(d.tasks)) continue;
+    const idx = d.tasks.findIndex(x => x.TaskID === id);
+    if (idx >= 0) {
+      const [removed] = d.tasks.splice(idx, 1);
+      d.total = Math.max(0, (d.total || 1) - 1);
+      adjustCacheCounts(d, removed.Status, !!removed.Overdue, null, false);
+      S.fresh[k] = Date.now();
+    }
+    if (S.selected[k]) S.selected[k].delete(id);
+  }
+  if (S.dashboard && S.dashboard.drilldown && Array.isArray(S.dashboard.drilldown.tasks)) {
+    S.dashboard.drilldown.tasks = S.dashboard.drilldown.tasks.filter(x => x.TaskID !== id);
+  }
+  if (S.openTask && S.openTask.TaskID === id) S.openTask = null;
+  if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
 }
 async function setStatus(t, status, skipUndo) {
   const prev = t.Status; if (prev === status) return;
@@ -1822,7 +1933,6 @@ async function setStatus(t, status, skipUndo) {
         }
       });
     }
-    ['mine', 'team'].forEach(k => { if (S.data[k]) loadList(k, { silent: true }); });
     if (S.view === 'dashboard') { delete S.dashFilters.offset; loadDashboard(); }
   }
   catch (e) { applyStatus(t, prev); updateRow(t); if (S.openId === t.TaskID) paintStatus(t); if (!e.auth) toast(e.message, true); }
@@ -1899,7 +2009,7 @@ async function reopenTask(form, btn) {
     try {
       const r = await api('apiUpdateTask', S.token, id, { status: $('#reopen-status').value, remark });
       closeDrawer(true); toast(r.mail && r.mail.queued ? 'Task reopened. The assignee email is queued.' : r.mail && r.mail.error ? 'Task reopened, but the email could not be prepared: ' + r.mail.error : 'Task reopened and the assignee was emailed.');
-      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      if (r.task) patchLocalTask(r.task); else patchLocalTask({ TaskID: id, Status: $('#reopen-status').value });
       if (S.view === 'dashboard') { delete S.dashFilters.offset; loadDashboard(); return; }
       const task = findTask(id); if (task) openTask(id);
     } catch (e) { err.textContent = e.message; err.hidden = false; }
@@ -1977,7 +2087,7 @@ async function saveTask(form, btn) {
   const id = form.dataset.id, err = $('#e-err'); err.hidden = true;
   const to = $('.pval', form).value;
   await busy(btn, async () => {
-  try { await api('apiUpdateTask', S.token, id, { title: $('#e-title').value, description: $('#e-desc').value, dueDate: $('#e-due').value, assignedTo: to }); toast('Task updated.'); S.openId = ''; closeDrawer(true); await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true }))); if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); } else { const t = findTask(id); if (t) { openTask(id); } } }
+  try { const r = await api('apiUpdateTask', S.token, id, { title: $('#e-title').value, description: $('#e-desc').value, dueDate: $('#e-due').value, assignedTo: to }); toast('Task updated.'); S.openId = ''; closeDrawer(true); if (r && r.task) patchLocalTask(r.task); if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); } else { const t = findTask(id); if (t) { openTask(id); } } }
     catch (e) { err.textContent = e.message; err.hidden = false; }
   });
 }
@@ -2466,8 +2576,10 @@ async function createTask(form, btn) {
       if (r.missingKeyUsers && r.missingKeyUsers.length) {
         toast('Note: ' + r.missingKeyUsers.join(', ') + ' has not signed in yet to activate an encryption key.', true);
       }
-      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
-      if (S.view === 'mine' || S.view === 'team') loadList(S.view);
+      if (!insertLocalTasks(r.createdTasks)) {
+        if (S.view === 'mine' || S.view === 'team') await loadList(S.view, { silent: true });
+        else await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      }
       if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); }
       setTimeout(() => {
         const el = $('.row[data-id="' + CSS.escape(r.taskId) + '"]');
@@ -2490,7 +2602,10 @@ async function applyBulkStatus(scope, btn) {
     try {
       const r = await api('apiBulkUpdateTaskStatus', S.token, ids, status, remark || '');
       S.selected[scope].clear();
-      await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      const applied = Array.isArray(r.updatedIds) ? r.updatedIds : ids.filter(id => !(r.failed || []).some(f => f.id === id));
+      applied.forEach(id => patchLocalTask({ TaskID: id, Status: status }, { skipRender: true }));
+      if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+      syncOpenTask();
       const mailErrors = (r.failed || []).filter(x => /email|mail/i.test(x.reason)).length;
       toast(r.updated + ' task(s) updated.' + ((r.failed || []).length ? ' ' + r.failed.length + ' task(s) need review.' : '') + (mailErrors ? ' ' + mailErrors + ' reopen email(s) could not be sent.' : ''), !!mailErrors);
       if (r.failed && r.failed.length) console.warn('Bulk task update items needing review:', r.failed);
@@ -3467,7 +3582,7 @@ const ACT = {
   status: el => { const t = S.openTask; if (t) setStatus(t, el.dataset.s); },
   chip: el => { const sc = S.view, f = S.filters[sc], k = el.dataset.k; delete f.status; delete f.overdue; if (k === 'over') f.overdue = true; else if (k !== 'all') f.status = k; renderChips(sc); loadList(sc, { silent: true }); },
   clear: () => { S.filters[S.view] = {}; renderTasksShell(S.view); loadList(S.view, { silent: true }); },
-  retry: () => loadList(S.view), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
+  retry: () => loadList(S.view), refreshlist: el => busy(el, () => (S.view === 'mine' || S.view === 'team') && loadList(S.view, { silent: true })), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
   remind: el => S.openTask && askRemind(S.openTask, el), sendremind: el => S.openTask && sendRemind(S.openTask, el), cancelremind: () => S.openTask && mount($('#d-actions'), taskActionsH(S.openTask)),
   edittask: el => { const t = findTask(el.dataset.id); if (t) editTask(t); }, canceledit: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   deletetask: el => {
@@ -3478,7 +3593,7 @@ const ACT = {
         await api('apiDeleteTask', S.token, id);
         toast('Task deleted.');
         closeDrawer(true);
-        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+        removeLocalTask(id);
         if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); }
       } catch (e) {
         if (!e.auth) toast(e.message, true);
@@ -3537,23 +3652,20 @@ const ACT = {
     if (!v) return toast('Please pick a valid due date.', true);
     await busy(el, async () => {
       try {
-        await api('apiUpdateTask', S.token, id, { dueDate: v });
+        const r = await api('apiUpdateTask', S.token, id, { dueDate: v });
         toast('Due date updated.');
+        patchLocalTask((r && r.task) ? r.task : { TaskID: id, Due: v });
         const t = findTask(id);
         if (t) {
-          t.Due = v;
-          t.Overdue = t.Status !== 'Completed' && dayDiff(v) < 0;
-          updateRow(t);
           const due = $('#d-due');
           if (due) {
-            due.textContent = fmtDate(v) + ' · ' + dueText(t);
+            due.textContent = fmtDate(t.Due) + ' · ' + dueText(t);
             due.style.color = t.Overdue ? 'var(--bad)' : '';
             due.style.fontWeight = t.Overdue ? '600' : '';
           }
           const box = $('#d-due-edit-box');
           if (box) box.hidden = true;
         }
-        await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
       } catch (e) {
         if (!e.auth) toast(e.message, true);
       }
