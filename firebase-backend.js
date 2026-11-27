@@ -2783,6 +2783,330 @@
       return { ok: true };
     },
 
+    // 14b. Master Bulk Import (People, Roles, Task Templates)
+    apiImportMeta: async function (token) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      const [cfg, hier, roles, regions, tpls] = await Promise.all([
+        tmConfig_(),
+        tmHierarchy_(),
+        tmRoles_(),
+        tmRegions_(),
+        tmTemplates_()
+      ]);
+      return {
+        ok: true,
+        minPasswordLength: Math.min(Number(cfg.MIN_PASSWORD_LENGTH) || 8, 6),
+        roles: roles.filter(r => r.Active).map(r => r.Role),
+        allRoleNames: roles.map(r => r.Role),
+        regions: regions.filter(r => r.Active).map(r => r.Region),
+        existingCodes: Object.keys(hier.byCode),
+        existingEmails: Object.values(hier.byCode).map(e => String(e.Email || '').toLowerCase()).filter(Boolean),
+        existingTemplateTitles: tpls.map(t => t.title.toLowerCase()),
+        peopleCount: Object.keys(hier.byCode).length
+      };
+    },
+
+    apiImportRoles: async function (token, rows) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      if (!Array.isArray(rows) || !rows.length) throw new Error('No role rows provided.');
+      if (rows.length > 200) throw new Error('You can import at most 200 roles at once.');
+
+      const existing = await tmRoles_();
+      const seen = new Set(existing.map(r => r.Role.toLowerCase()));
+      const batchSeen = new Set();
+      const toCreate = [];
+      const results = [];
+
+      rows.forEach((raw, idx) => {
+        const rowNum = Number(raw && raw._row) || (idx + 2);
+        const roleName = tmClip_(raw && raw.Role, 80);
+        if (!roleName) {
+          results.push({ row: rowNum, key: '(blank)', status: 'FAILED', message: 'Role name is required.' });
+          return;
+        }
+        const low = roleName.toLowerCase();
+        if (seen.has(low)) {
+          results.push({ row: rowNum, key: roleName, status: 'SKIPPED', message: 'Role already exists.' });
+          return;
+        }
+        if (batchSeen.has(low)) {
+          results.push({ row: rowNum, key: roleName, status: 'FAILED', message: 'Duplicate role name inside file.' });
+          return;
+        }
+        batchSeen.add(low);
+        const rec = {
+          Role: roleName,
+          Level: Number(raw.Level) || 20,
+          Chain: tmClip_(raw.Chain || 'Custom', 30) || 'Custom',
+          IsHeadOffice: tmYes_(raw.IsHeadOffice),
+          IsAdmin: tmYes_(raw.IsAdmin),
+          Active: raw.Active === undefined || raw.Active === '' ? true : tmYes_(raw.Active)
+        };
+        toCreate.push({ rowNum, rec });
+      });
+
+      if (toCreate.length) {
+        const batch = db.batch();
+        toCreate.forEach(item => {
+          batch.set(db.collection('roles').doc(item.rec.Role), item.rec);
+          results.push({ row: item.rowNum, key: item.rec.Role, status: 'CREATED', message: 'Role created.' });
+        });
+        await batch.commit();
+        memoClear();
+        await tmAudit_(user.EmpCode, 'ROLES_BULK_IMPORT', 'roles', { created: toCreate.length });
+      }
+
+      results.sort((a, b) => a.row - b.row);
+      const created = results.filter(x => x.status === 'CREATED').length;
+      const skipped = results.filter(x => x.status === 'SKIPPED').length;
+      const failed = results.filter(x => x.status === 'FAILED').length;
+      return { ok: true, created, skipped, failed, results };
+    },
+
+    apiImportTemplates: async function (token, rows) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      if (!Array.isArray(rows) || !rows.length) throw new Error('No task template rows provided.');
+      if (rows.length > 200) throw new Error('You can import at most 200 task templates at once.');
+
+      const [rolesList, existingTpls] = await Promise.all([tmRoles_(), tmTemplates_()]);
+      const activeRoles = new Set(rolesList.filter(r => r.Active).map(r => r.Role));
+      const existingTitles = new Set(existingTpls.map(t => t.title.toLowerCase()));
+      const batchTitles = new Set();
+      const toCreate = [];
+      const results = [];
+      const now = new Date();
+
+      rows.forEach((raw, idx) => {
+        const rowNum = Number(raw && raw._row) || (idx + 2);
+        const title = tmClip_(raw && raw.Title, 200);
+        if (!title) {
+          results.push({ row: rowNum, key: '(blank)', status: 'FAILED', message: 'Title is required.' });
+          return;
+        }
+        const low = title.toLowerCase();
+        if (existingTitles.has(low)) {
+          results.push({ row: rowNum, key: title, status: 'SKIPPED', message: 'A template with this title already exists.' });
+          return;
+        }
+        if (batchTitles.has(low)) {
+          results.push({ row: rowNum, key: title, status: 'FAILED', message: 'Duplicate template title inside file.' });
+          return;
+        }
+
+        const all = tmYes_(raw.AllDesignations);
+        const rawRoles = Array.isArray(raw.Roles)
+          ? raw.Roles
+          : String(raw.Roles || '').split(/[,;|]/).map(s => tmClip_(s, 80)).filter(Boolean);
+        const roles = Array.from(new Set(rawRoles));
+        const badRoles = roles.filter(r => !activeRoles.has(r));
+        const active = raw.Active === undefined || raw.Active === '' ? 'Y' : tmYN_(raw.Active);
+
+        if (!all && badRoles.length) {
+          results.push({ row: rowNum, key: title, status: 'FAILED', message: 'Unknown or inactive role(s): ' + badRoles.join(', ') });
+          return;
+        }
+        if (!all && !roles.length && active === 'Y') {
+          results.push({ row: rowNum, key: title, status: 'FAILED', message: 'Specify Roles or set AllDesignations to Y.' });
+          return;
+        }
+
+        batchTitles.add(low);
+        const tplId = tmId_('TPL');
+        toCreate.push({
+          rowNum,
+          tplId,
+          rec: {
+            TemplateID: tplId,
+            Title: title,
+            Description: tmClip_(raw.Description, 2000),
+            Designations: all ? TM_TPL_ALL : JSON.stringify(roles),
+            All: all,
+            Roles: all ? [] : roles,
+            Active: active,
+            CreatedBy: user.EmpCode,
+            CreatedAt: now,
+            UpdatedAt: now
+          }
+        });
+      });
+
+      if (toCreate.length) {
+        const batch = db.batch();
+        toCreate.forEach(item => {
+          batch.set(db.collection('taskTemplates').doc(item.tplId), item.rec);
+          results.push({ row: item.rowNum, key: item.rec.Title, status: 'CREATED', message: 'Template created.' });
+        });
+        await batch.commit();
+        await tmAudit_(user.EmpCode, 'TEMPLATES_BULK_IMPORT', 'taskTemplates', { created: toCreate.length });
+      }
+
+      results.sort((a, b) => a.row - b.row);
+      const created = results.filter(x => x.status === 'CREATED').length;
+      const skipped = results.filter(x => x.status === 'SKIPPED').length;
+      const failed = results.filter(x => x.status === 'FAILED').length;
+      return { ok: true, created, skipped, failed, results };
+    },
+
+    apiImportPeople: async function (token, rows) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      if (!access.admin) throw new Error('Administrator access is required.');
+      if (!Array.isArray(rows) || !rows.length) throw new Error('No employee rows provided.');
+      if (rows.length > 100) throw new Error('You can import at most 100 people in one upload.');
+
+      const [cfg, hier, rolesList, regionsList] = await Promise.all([
+        tmConfig_(),
+        tmHierarchy_(),
+        tmRoles_(),
+        tmRegions_()
+      ]);
+
+      const workingByCode = Object.assign({}, hier.byCode);
+      const batchCodes = new Set();
+      const batchEmails = new Set();
+      const existingEmails = new Set(Object.values(workingByCode).map(e => String(e.Email || '').toLowerCase()).filter(Boolean));
+      const candidates = [];
+      const results = [];
+
+      rows.forEach((raw, idx) => {
+        const rowNum = Number(raw && raw._row) || (idx + 2);
+        const code = tmClip_(raw && raw.EmpCode, 30).toUpperCase();
+        if (!code) {
+          results.push({ row: rowNum, key: '(blank)', status: 'FAILED', message: 'Employee code is required.' });
+          return;
+        }
+        if (workingByCode[code]) {
+          results.push({ row: rowNum, key: code, status: 'SKIPPED', message: 'Employee code already exists.' });
+          return;
+        }
+        if (batchCodes.has(code)) {
+          results.push({ row: rowNum, key: code, status: 'FAILED', message: 'Duplicate employee code inside file.' });
+          return;
+        }
+        const email = tmClip_(raw.Email, 254);
+        const lowEmail = email.toLowerCase();
+        if (lowEmail && (existingEmails.has(lowEmail) || batchEmails.has(lowEmail))) {
+          results.push({ row: rowNum, key: code, status: 'FAILED', message: 'Email address is already in use.' });
+          return;
+        }
+        batchCodes.add(code);
+        if (lowEmail) batchEmails.add(lowEmail);
+
+        const p = {
+          EmpCode: code,
+          EmpName: tmClip_(raw.EmpName, 100),
+          Nazim: tmClip_(raw.Nazim, 30).toUpperCase(),
+          Division: tmClip_(raw.Division, 80),
+          Region: tmClip_(raw.Region, 60),
+          Role: tmClip_(raw.Role, 80),
+          Email: email,
+          Password: String(raw.Password == null ? '' : raw.Password),
+          Active: 'Y'
+        };
+        candidates.push({ rowNum, p });
+      });
+
+      // Stage valid candidate stubs so a subordinate can reference a Nazim created in the same file
+      const candidateMap = {};
+      candidates.forEach(c => { candidateMap[c.p.EmpCode] = c; });
+      const combinedForValidation = Object.assign({}, workingByCode);
+      candidates.forEach(c => { combinedForValidation[c.p.EmpCode] = Object.assign({}, c.p); });
+
+      const validQueue = [];
+      for (const item of candidates) {
+        const errs = await tmValidatePerson_(item.p, combinedForValidation, cfg.MIN_PASSWORD_LENGTH);
+        if (errs.length) {
+          results.push({ row: item.rowNum, key: item.p.EmpCode, status: 'FAILED', message: errs[0] });
+          delete combinedForValidation[item.p.EmpCode];
+        } else {
+          validQueue.push(item);
+        }
+      }
+
+      // Topological sort so Nazims in the batch are created before their direct reports
+      const ordered = [];
+      const placed = new Set(Object.keys(workingByCode));
+      const remaining = validQueue.slice();
+      while (remaining.length) {
+        let progressed = false;
+        for (let i = 0; i < remaining.length; i++) {
+          const item = remaining[i];
+          if (!item.p.Nazim || placed.has(item.p.Nazim)) {
+            ordered.push(item);
+            placed.add(item.p.EmpCode);
+            remaining.splice(i, 1);
+            i--;
+            progressed = true;
+          }
+        }
+        if (!progressed) {
+          // Remaining rows reference a Nazim that failed validation
+          remaining.forEach(item => {
+            results.push({ row: item.rowNum, key: item.p.EmpCode, status: 'FAILED', message: `Manager "${item.p.Nazim}" failed validation or was missing.` });
+          });
+          break;
+        }
+      }
+
+      const activeRegions = new Set(regionsList.filter(r => r.Active).map(r => r.Region));
+      let created = 0;
+      for (const item of ordered) {
+        const p = item.p;
+        if (!activeRegions.has(p.Region)) {
+          results.push({ row: item.rowNum, key: p.EmpCode, status: 'FAILED', message: `Region "${p.Region}" is invalid.` });
+          continue;
+        }
+        if (p.Nazim && !workingByCode[p.Nazim]) {
+          results.push({ row: item.rowNum, key: p.EmpCode, status: 'FAILED', message: `Manager "${p.Nazim}" was not created.` });
+          continue;
+        }
+        const authEmail = authEmailFor_(p.EmpCode, p.Email);
+        try {
+          const authUid = await createAuthUserAsAdmin_(authEmail, p.Password);
+          const empDoc = {
+            EmpCode: p.EmpCode,
+            EmpName: p.EmpName,
+            Nazim: p.Nazim,
+            Division: p.Division,
+            Region: p.Region,
+            Role: p.Role,
+            Email: p.Email,
+            AuthEmail: authEmail,
+            AuthUid: authUid,
+            Active: 'Y',
+            MustChangePassword: 'N',
+            SessionVersion: '1',
+            CreatedAt: new Date()
+          };
+          await db.collection('employees').doc(p.EmpCode).set(empDoc, { merge: true });
+          await syncUserMapping_(authUid, empDoc, rolesList, authEmail);
+          if (window.CryptoVault && window.CryptoVault.provisionUserKey) {
+            await window.CryptoVault.provisionUserKey(db, p.EmpCode, p.Password).catch(() => {});
+          }
+          workingByCode[p.EmpCode] = empDoc;
+          created++;
+          results.push({ row: item.rowNum, key: p.EmpCode, status: 'CREATED', message: `${p.EmpName} created.` });
+        } catch (err) {
+          results.push({ row: item.rowNum, key: p.EmpCode, status: 'FAILED', message: mapAuthError_(err) });
+        }
+      }
+
+      if (created) {
+        memoClear();
+        await tmAudit_(user.EmpCode, 'PEOPLE_BULK_IMPORT', 'employees', { created });
+      }
+      results.sort((a, b) => a.row - b.row);
+      const skipped = results.filter(x => x.status === 'SKIPPED').length;
+      const failed = results.filter(x => x.status === 'FAILED').length;
+      return { ok: true, created, skipped, failed, results };
+    },
+
     // 15. Password & Session
     apiChangePassword: async function (token, currentPw, newPw) {
       const { user, fbUser } = await tmAuth_(token);
