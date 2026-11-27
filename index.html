@@ -2572,9 +2572,19 @@ async function adminOverview() {
   </div>`);
 }
 
+const INDIA_STATES_ALL = [
+  'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
+  'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa',
+  'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya',
+  'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan', 'Sikkim',
+  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
+];
+const getIndiaStates = () => (S.admin && S.admin.indiaStates) || (S.boot && S.boot.lists && S.boot.lists.indiaStates) || (S.importMeta && S.importMeta.indiaStates) || INDIA_STATES_ALL;
+
 async function adminPeople() {
   const r = await api('apiAdminPeople', S.token); if (!inAdmin('people')) return;
-  S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.states = r.states || []; S.admin.divisions = r.divisions || []; S.admin.appRoles = r.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin']; S.admin.q = S.admin.q || '';
+  S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.states = r.states || []; S.admin.divisions = r.divisions || []; S.admin.indiaStates = r.indiaStates || INDIA_STATES_ALL; S.admin.appRoles = r.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin']; S.admin.q = S.admin.q || '';
   mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><div class="actions"><button class="btn" data-act="goimport" data-kind="people">⬆ Import Excel</button><button class="btn primary" data-act="addperson">+ Add person</button></div></div>
     <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role / Scope</th><th>Location (Region › State › Division)</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
   paintPeople();
@@ -2587,25 +2597,33 @@ function paintPeople() {
     return h`<tr class="click" data-act="editperson" data-c="${p.EmpCode}" tabindex="0"><td><b>${p.EmpName}</b><br><small>${p.Email}</small></td><td>${p.EmpCode}</td><td><b>${p.Role}</b>${p.AppRole && p.AppRole !== 'User' ? h`<br><span class="task-origin">${p.AppRole}</span>` : ''}</td><td>${loc || '—'}</td><td>${p.Nazim ? (by[p.Nazim] ? by[p.Nazim].EmpName : p.Nazim) : '—'}</td><td>${p.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Off</span>`}</td></tr>`;
   })}` : h`<tr><td colspan="6" class="muted">No one found.</td></tr>`);
 }
+function personRegionOptionsHtml(curReg) {
+  const list = S.admin.regionNames || [];
+  const all = curReg && !list.includes(curReg) ? [curReg].concat(list) : list;
+  return '<option value="">Choose region…</option>' + all.map(r => `<option value="${esc(r)}" ${r === curReg ? 'selected' : ''}>${esc(r)}</option>`).join('') + '<option value="__NEW__">+ Add Region manually…</option>';
+}
 function personStateOptionsHtml(region, curState) {
   const list = (S.admin.states || []).filter(s => !region || s.Region === region).map(s => s.State);
   const all = curState && !list.includes(curState) ? [curState].concat(list) : list;
-  return '<option value="">' + (region ? 'Choose state…' : 'Select Region first…') + '</option>' + all.map(s => `<option value="${esc(s)}" ${s === curState ? 'selected' : ''}>${esc(s)}</option>`).join('');
+  return '<option value="">' + (region ? 'Choose state…' : 'Select Region first…') + '</option>' + all.map(s => `<option value="${esc(s)}" ${s === curState ? 'selected' : ''}>${esc(s)}</option>`).join('') + (region ? '<option value="__NEW__">+ Add State (India list / manual)…</option>' : '');
 }
 function personDivisionOptionsHtml(region, state, curDiv) {
   const list = (S.admin.divisions || []).filter(d => (!region || d.Region === region) && (!state || d.State === state)).map(d => d.Division);
   const all = curDiv && !list.includes(curDiv) ? [curDiv].concat(list) : list;
-  return '<option value="">' + (state ? 'Choose division…' : 'Select State first…') + '</option>' + all.map(d => `<option value="${esc(d)}" ${d === curDiv ? 'selected' : ''}>${esc(d)}</option>`).join('');
+  return '<option value="">' + (state ? 'Choose division…' : 'Select State first…') + '</option>' + all.map(d => `<option value="${esc(d)}" ${d === curDiv ? 'selected' : ''}>${esc(d)}</option>`).join('') + (region && state ? '<option value="__NEW__">+ Add Division manually…</option>' : '');
 }
 function openPerson(code) {
   const p = code ? S.admin.people.find(x => x.EmpCode === code) : { EmpCode: '', EmpName: '', Nazim: '', Division: '', State: '', Region: '', Role: '', AppRole: 'User', Email: '', Active: 'Y' }, isNew = !code;
   const src = S.admin.people.filter(x => x.Active === 'Y' && x.EmpCode !== code).map(x => ({ c: x.EmpCode, n: x.EmpName, r: x.Role, g: x.Region }));
   const sel = (arr, cur) => h`<option value="">Choose…</option>${arr.map(x => h`<option ${x === cur ? 'selected' : ''}>${x}</option>`)}`;
   const appRoles = S.admin.appRoles || ['User', 'Division Admin', 'State Admin', 'Region Admin'];
+  const regOpts = (S.admin.regionNames || []).slice();
+  if (p.Region && !regOpts.includes(p.Region)) regOpts.unshift(p.Region);
   const stateOpts = (S.admin.states || []).filter(s => p.Region && s.Region === p.Region).map(s => s.State);
   if (p.State && !stateOpts.includes(p.State)) stateOpts.unshift(p.State);
   const divOpts = (S.admin.divisions || []).filter(d => p.Region && d.Region === p.Region && (!p.State || d.State === p.State)).map(d => d.Division);
   if (p.Division && !divOpts.includes(p.Division)) divOpts.unshift(p.Division);
+  const indiaStates = getIndiaStates();
 
   openDrawer(dheadH(isNew ? 'Add person' : p.EmpName, isNew ? '' : p.EmpCode), h`<form id="personForm" data-form="saveperson" data-new="${isNew ? '1' : ''}">
     <div class="two"><label class="field"><span>Employee code</span><input id="pe-code" value="${p.EmpCode}" ${isNew ? 'autofocus' : 'readonly'} required maxlength="30"></label><label class="field"><span>Full name</span><input id="pe-name" value="${p.EmpName}" required maxlength="100"></label></div>
@@ -2614,11 +2632,23 @@ function openPerson(code) {
       <label class="field"><span>App Role (Task Scope)</span><select id="pe-approle">${appRoles.map(ar => h`<option value="${ar}" ${(p.AppRole || 'User') === ar ? 'selected' : ''}>${ar}</option>`)}</select><small class="hint">Division/State/Region Admins see all tasks in their assigned area.</small></label>
     </div>
     <div class="two">
-      <label class="field"><span>Region (India)</span><select id="pe-region" data-ch="peregion" required>${sel(S.admin.regionNames, p.Region)}</select></label>
-      <label class="field"><span>State</span><select id="pe-state" data-ch="pestate"><option value="">${p.Region ? 'Choose state…' : 'Select Region first…'}</option>${stateOpts.map(s => h`<option value="${s}" ${s === p.State ? 'selected' : ''}>${s}</option>`)}</select></label>
+      <div class="field"><span>Region (India)</span>
+        <select id="pe-region" data-ch="peregion" required><option value="">Choose region…</option>${regOpts.map(r => h`<option value="${r}" ${r === p.Region ? 'selected' : ''}>${r}</option>`)}<option value="__NEW__">+ Add Region manually…</option></select>
+        <div id="pe-add-reg-box" hidden style="display:flex;gap:6px;margin-top:6px"><input id="pe-new-reg" placeholder="New region name" maxlength="60"><button type="button" class="btn sm primary" data-act="qaddreg" data-busy="Adding">Add</button></div>
+      </div>
+      <div class="field"><span>State</span>
+        <select id="pe-state" data-ch="pestate"><option value="">${p.Region ? 'Choose state…' : 'Select Region first…'}</option>${stateOpts.map(s => h`<option value="${s}" ${s === p.State ? 'selected' : ''}>${s}</option>`)}${p.Region ? h`<option value="__NEW__">+ Add State (India list / manual)…</option>` : ''}</select>
+        <div id="pe-add-st-box" hidden style="display:grid;gap:6px;margin-top:6px">
+          <select id="pe-new-st-sel" data-ch="penewstsel"><option value="">Pick Indian State / UT…</option>${indiaStates.map(s => h`<option value="${s}">${s}</option>`)}<option value="__CUSTOM__">Other (type manually)…</option></select>
+          <div style="display:flex;gap:6px"><input id="pe-new-st-txt" placeholder="Enter state name" maxlength="60" hidden><button type="button" class="btn sm primary" data-act="qaddst" data-busy="Adding">Add State</button></div>
+        </div>
+      </div>
     </div>
     <div class="two">
-      <label class="field"><span>Division</span><select id="pe-div"><option value="">${p.State ? 'Choose division…' : 'Select State first…'}</option>${divOpts.map(d => h`<option value="${d}" ${d === p.Division ? 'selected' : ''}>${d}</option>`)}</select></label>
+      <div class="field"><span>Division</span>
+        <select id="pe-div" data-ch="pediv"><option value="">${p.State ? 'Choose division…' : 'Select State first…'}</option>${divOpts.map(d => h`<option value="${d}" ${d === p.Division ? 'selected' : ''}>${d}</option>`)}${p.Region && p.State ? h`<option value="__NEW__">+ Add Division manually…</option>` : ''}</select>
+        <div id="pe-add-dv-box" hidden style="display:flex;gap:6px;margin-top:6px"><input id="pe-new-dv" placeholder="New division name" maxlength="80"><button type="button" class="btn sm primary" data-act="qadddv" data-busy="Adding">Add</button></div>
+      </div>
       <div class="field"><span>Assign Nazim</span>${pickerH('mgr', src, p.Nazim, 'Type a name or code')}<small class="hint">Leave empty only for top of chain.</small></div>
     </div>
     <label class="field"><span>Email</span><input id="pe-email" type="email" value="${p.Email}" required maxlength="254"></label>
@@ -2629,7 +2659,13 @@ function openPerson(code) {
 }
 async function savePerson(form, btn) {
   const err = $('#pe-err'); err.hidden = true; const isNew = !!form.dataset.new;
-  const body = { EmpCode: $('#pe-code').value, EmpName: $('#pe-name').value, Role: $('#pe-role').value, AppRole: $('#pe-approle').value, Region: $('#pe-region').value, State: $('#pe-state').value, Division: $('#pe-div').value, Nazim: $('.pval', form).value, Email: $('#pe-email').value, Password: $('#pe-pw').value };
+  const reg = $('#pe-region').value, st = $('#pe-state').value, dv = $('#pe-div').value;
+  if (reg === '__NEW__' || st === '__NEW__' || dv === '__NEW__') {
+    err.textContent = 'Finish adding the new Region / State / Division using the Add button first.';
+    err.hidden = false;
+    return;
+  }
+  const body = { EmpCode: $('#pe-code').value, EmpName: $('#pe-name').value, Role: $('#pe-role').value, AppRole: $('#pe-approle').value, Region: reg, State: st, Division: dv, Nazim: $('.pval', form).value, Email: $('#pe-email').value, Password: $('#pe-pw').value };
   if (!isNew) body.Active = $('#pe-active').checked ? 'Y' : 'N';
   await busy(btn, async () => { try { await api('apiSavePerson', S.token, body); closeDrawer(true); toast(isNew ? 'Person added.' : 'Saved.'); if (inAdmin('people')) adminPeople(); } catch (e) { err.textContent = e.message; err.hidden = false; } });
 }
@@ -2672,28 +2708,104 @@ async function saveTemplate(form, btn) {
 
 async function adminRoles() {
   const r = await api('apiAdminRoles', S.token); if (!inAdmin('roles')) return;
-  S.admin.roles = r.roles.map(x => Object.assign({}, x, { isNew: false })); paintRoles();
+  S.admin.roles = r.roles.map(x => Object.assign({}, x, { isNew: false }));
+  S.admin.roleInUse = r.inUse || {};
+  paintRoles();
 }
 function sw(bind, i, k, on) { return h`<label class="sw"><input type="checkbox" data-bind="${bind}" data-i="${i}" data-k="${k}" ${on ? 'checked' : ''} aria-label="${k}"><span></span></label>`; }
+function buildRoleTreeNodes(roles) {
+  const byName = {}, children = {}, roots = [];
+  roles.forEach(r => { if (r.Role) byName[r.Role] = r; });
+  roles.forEach(r => {
+    if (!r.Role) return;
+    if (r.ParentRole && byName[r.ParentRole] && r.ParentRole !== r.Role) {
+      (children[r.ParentRole] = children[r.ParentRole] || []).push(r);
+    } else {
+      roots.push(r);
+    }
+  });
+  const out = [], seen = new Set();
+  const walk = (node, depth) => {
+    if (seen.has(node.Role)) return;
+    seen.add(node.Role);
+    out.push({ role: node, depth });
+    (children[node.Role] || []).sort((a, b) => a.Role.localeCompare(b.Role)).forEach(ch => walk(ch, depth + 1));
+  };
+  roots.sort((a, b) => (b.IsAdmin - a.IsAdmin) || a.Role.localeCompare(b.Role)).forEach(r => walk(r, 0));
+  roles.forEach(r => { if (r.Role && !seen.has(r.Role)) walk(r, 0); });
+  return out;
+}
 function paintRoles() {
-  mount($('#adm'), h`<div class="panel"><h3>Roles</h3><p class="muted"><b>Head office</b> roles can see every region. <b>Admin</b> roles manage this app.</p>
-    <div class="scroll-x"><table class="tbl"><thead><tr><th>Role</th><th>Head office</th><th>Admin</th><th>Active</th><th></th></tr></thead><tbody>
-    ${S.admin.roles.map((r, i) => h`<tr><td>${r.isNew ? h`<input class="cell-in" data-bind="roles" data-i="${i}" data-k="Role" value="${r.Role}" placeholder="Role name" aria-label="Role name" maxlength="80">` : h`<b>${r.Role}</b>`}</td>
-      <td>${sw('roles', i, 'IsHeadOffice', r.IsHeadOffice)}</td><td>${sw('roles', i, 'IsAdmin', r.IsAdmin)}</td><td>${sw('roles', i, 'Active', r.Active)}</td>
-      <td>${r.isNew ? h`<button class="btn ghost sm" data-act="rmrole" data-i="${i}" aria-label="Remove">✕</button>` : ''}</td></tr>`)}</tbody></table></div>
-    <div class="actions" style="margin-top:14px"><button class="btn" data-act="addrole">+ Add role</button><button class="btn" data-act="goimport" data-kind="roles">⬆ Import Excel</button><button class="btn primary" data-act="saveroles" data-busy="Saving">Save roles</button></div><div id="rl-err" class="notice bad" hidden style="margin-top:12px"></div></div>`);
+  const roles = S.admin.roles || [], inUse = S.admin.roleInUse || {};
+  const roleNames = roles.map(x => x.Role).filter(Boolean);
+  const tree = buildRoleTreeNodes(roles);
+  const unusedCount = roles.filter(r => r.Role && r.Role !== 'Admin' && !inUse[r.Role]).length;
+
+  mount($('#adm'), h`<div style="display:grid;gap:16px">
+    <section class="panel" style="margin:0">
+      <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <h3 style="margin:0">Roles &amp; Role Hierarchy</h3>
+          <small class="muted">Create your own roles and set who each role reports to (<b>Reports To</b>). <b>Head office</b> sees all regions; <b>Admin</b> manages this app.</small>
+        </div>
+        <div class="actions">
+          ${unusedCount ? h`<button type="button" class="btn danger sm" data-act="rmunusedroles">Remove ${unusedCount} unused</button>` : ''}
+          <button type="button" class="btn" data-act="goimport" data-kind="roles">⬆ Import Excel</button>
+        </div>
+      </div>
+      <div class="scroll-x"><table class="tbl"><thead><tr><th>Role Name</th><th>Reports To (Parent Role)</th><th>Tier</th><th>Head Office</th><th>Admin</th><th>Active</th><th>In Use</th><th></th></tr></thead><tbody>
+      ${roles.map((r, i) => {
+        const used = inUse[r.Role] || 0;
+        const canDelete = r.isNew || (!used && r.Role !== 'Admin');
+        return h`<tr>
+          <td>${r.isNew ? h`<input class="cell-in" data-bind="roles" data-i="${i}" data-k="Role" value="${r.Role}" placeholder="Role name" aria-label="Role name" maxlength="80">` : h`<b>${r.Role}</b>`}</td>
+          <td><select class="cell-in" data-bind="roles" data-i="${i}" data-k="ParentRole" aria-label="Reports to role">
+            <option value="">Top Level (None)</option>
+            ${roleNames.filter(n => n !== r.Role).map(n => h`<option value="${n}" ${r.ParentRole === n ? 'selected' : ''}>${n}</option>`)}
+          </select></td>
+          <td class="num"><span class="badge b-PASS" style="background:var(--soft);color:var(--ink)">L${r.Level || 1}</span></td>
+          <td>${sw('roles', i, 'IsHeadOffice', r.IsHeadOffice)}</td>
+          <td>${sw('roles', i, 'IsAdmin', r.IsAdmin)}</td>
+          <td>${sw('roles', i, 'Active', r.Active)}</td>
+          <td class="num">${used || '0'}</td>
+          <td>${canDelete ? h`<button class="btn ghost sm" data-act="rmrole" data-i="${i}" aria-label="Remove" title="Delete role">✕</button>` : ''}</td>
+        </tr>`;
+      })}</tbody></table></div>
+      <div class="actions" style="margin-top:14px"><button class="btn" data-act="addrole">+ Add role</button><button class="btn primary" data-act="saveroles" data-busy="Saving">Save roles &amp; hierarchy</button></div>
+      <div id="rl-err" class="notice bad" hidden style="margin-top:12px"></div>
+    </section>
+
+    <section class="panel" style="margin:0">
+      <h3 style="margin-bottom:6px">Role Hierarchy Tree</h3>
+      <small class="muted" style="display:block;margin-bottom:10px">Live structure showing how roles stack from top level down.</small>
+      ${tree.length ? h`<div style="display:grid;gap:6px">${tree.map(n => {
+        const r = n.role, cnt = inUse[r.Role] || 0;
+        return h`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);margin-left:${Math.min(n.depth * 24, 144)}px">
+          <span class="muted">${n.depth ? '↳' : '●'}</span>
+          <b>${r.Role}</b>
+          <span class="badge" style="background:var(--soft);color:var(--muted)">Tier ${n.depth + 1}</span>
+          ${r.IsAdmin ? h`<span class="task-origin">Admin</span>` : r.IsHeadOffice ? h`<span class="task-origin">Head Office</span>` : ''}
+          ${!r.Active ? h`<span class="st st-Pending">Off</span>` : ''}
+          <span class="grow"></span>
+          <small class="muted num">${cnt} staff</small>
+        </div>`;
+      })}</div>` : h`<div class="empty"><b>No roles yet</b>Add your first role above.</div>`}
+    </section>
+  </div>`);
 }
 
 /* ---- admin: locations hierarchy (India > Region > State > Division) ---- */
 async function adminLocations() {
   const r = await api('apiAdminLocations', S.token); if (!inAdmin('locations')) return;
   S.admin.loc = { regions: r.regions || [], states: r.states || [], divisions: r.divisions || [] };
+  S.admin.indiaStates = r.indiaStates || INDIA_STATES_ALL;
   S.admin.locReg = S.admin.locReg || '';
   S.admin.locState = S.admin.locState || '';
   paintLocations();
 }
 function paintLocations() {
   const loc = S.admin.loc || { regions: [], states: [], divisions: [] };
+  const indiaStates = getIndiaStates();
   const activeRegs = loc.regions.filter(r => r.Active).map(r => r.Region);
   const fReg = S.admin.locReg || '';
   const fState = S.admin.locState || '';
@@ -2706,9 +2818,12 @@ function paintLocations() {
       <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
           <h3 style="margin:0">Location Hierarchy (India › Region › State › Division)</h3>
-          <small class="muted">Select a Region to manage its States, and select a State to manage its Divisions.</small>
+          <small class="muted">Create your own Regions under India, assign Indian States (or custom states) under each Region, and add Divisions under each State.</small>
         </div>
-        <button type="button" class="btn" data-act="goimport" data-kind="locations">⬆ Import Excel</button>
+        <div class="actions">
+          ${(loc.regions.length || loc.states.length || loc.divisions.length) ? h`<button type="button" class="btn danger sm" data-act="clearunusedlocs" data-busy="Cleaning">Remove unused</button>` : ''}
+          <button type="button" class="btn" data-act="goimport" data-kind="locations">⬆ Import Excel</button>
+        </div>
       </div>
       <div class="two" style="margin-top:10px">
         <label class="field" style="margin:0"><span>Filter by Region (India)</span>
@@ -2724,23 +2839,31 @@ function paintLocations() {
       <section class="panel" style="margin:0">
         <h3>1. Regions (under India)</h3>
         <form data-form="addregion" style="display:flex;gap:8px;margin-bottom:12px">
-          <input id="loc-new-reg" class="cell-in" placeholder="New region name (e.g. Delhi)" maxlength="60" required>
+          <input id="loc-new-reg" class="cell-in" placeholder="Add region manually (e.g. North, Delhi)" maxlength="60" required>
           <button class="btn primary sm" data-busy="Adding">+ Add</button>
         </form>
-        <div class="scroll-x" style="max-height:300px;overflow-y:auto"><table class="tbl"><thead><tr><th>Region</th><th>Active</th></tr></thead><tbody>
-          ${loc.regions.map(r => h`<tr><td><b>${r.Region}</b></td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="region" data-id="${r.id || r.Region}" data-name="${r.Region}" ${r.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
-        </tbody></table></div>
+        ${loc.regions.length ? h`<div class="scroll-x" style="max-height:300px;overflow-y:auto"><table class="tbl"><thead><tr><th>Region</th><th>Active</th><th></th></tr></thead><tbody>
+          ${loc.regions.map(r => h`<tr><td><b>${r.Region}</b></td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="region" data-id="${r.id || r.Region}" data-name="${r.Region}" ${r.Active ? 'checked' : ''}><span></span></label></td><td><button type="button" class="btn ghost sm" data-act="delloc" data-kind="region" data-id="${r.id || r.Region}" title="Delete unused region">✕</button></td></tr>`)}
+        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No regions yet</b>Add your first Region manually above or import via Excel.</div>`}
       </section>
 
       <section class="panel" style="margin:0">
         <h3>2. States (under Region)</h3>
         <form data-form="addstate" style="display:grid;gap:8px;margin-bottom:12px">
           <select id="loc-st-reg" class="cell-in" required><option value="">Choose parent Region…</option>${activeRegs.map(r => h`<option value="${r}" ${fReg === r ? 'selected' : ''}>${r}</option>`)}</select>
-          <div style="display:flex;gap:8px"><input id="loc-new-st" class="cell-in" placeholder="New state name (e.g. Haryana)" maxlength="60" required><button class="btn primary sm" data-busy="Adding">+ Add</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="loc-st-pick" class="cell-in" data-ch="locstpick" style="flex:1;min-width:180px" required>
+              <option value="">Choose Indian State / UT…</option>
+              ${indiaStates.map(s => h`<option value="${s}">${s}</option>`)}
+              <option value="__CUSTOM__">Other (type manually)…</option>
+            </select>
+            <input id="loc-new-st" class="cell-in" placeholder="Custom state name" maxlength="60" hidden style="flex:1;min-width:150px">
+            <button class="btn primary sm" data-busy="Adding">+ Add</button>
+          </div>
         </form>
-        ${statesForReg.length ? h`<div class="scroll-x" style="max-height:260px;overflow-y:auto"><table class="tbl"><thead><tr><th>State</th><th>Region</th><th>Active</th></tr></thead><tbody>
-          ${statesForReg.map(s => h`<tr><td><b>${s.State}</b></td><td>${s.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="state" data-id="${s.id}" data-reg="${s.Region}" data-name="${s.State}" ${s.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
-        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No states yet</b>Add a state under a Region above.</div>`}
+        ${statesForReg.length ? h`<div class="scroll-x" style="max-height:260px;overflow-y:auto"><table class="tbl"><thead><tr><th>State</th><th>Region</th><th>Active</th><th></th></tr></thead><tbody>
+          ${statesForReg.map(s => h`<tr><td><b>${s.State}</b></td><td>${s.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="state" data-id="${s.id}" data-reg="${s.Region}" data-name="${s.State}" ${s.Active ? 'checked' : ''}><span></span></label></td><td><button type="button" class="btn ghost sm" data-act="delloc" data-kind="state" data-id="${s.id}" title="Delete unused state">✕</button></td></tr>`)}
+        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No states mapped yet</b>Pick a Region and Indian State above to link them.</div>`}
       </section>
 
       <section class="panel" style="margin:0;grid-column:1/-1">
@@ -2748,11 +2871,11 @@ function paintLocations() {
         <form data-form="adddivision" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px;align-items:end">
           <select id="loc-dv-reg" class="cell-in" data-ch="locdvreg" required><option value="">Choose Region…</option>${activeRegs.map(r => h`<option value="${r}" ${fReg === r ? 'selected' : ''}>${r}</option>`)}</select>
           <select id="loc-dv-st" class="cell-in" required><option value="">Choose State…</option>${activeStatesForReg.map(s => h`<option value="${s}" ${fState === s ? 'selected' : ''}>${s}</option>`)}</select>
-          <div style="display:flex;gap:8px"><input id="loc-new-dv" class="cell-in" placeholder="New division name" maxlength="80" required><button class="btn primary sm" data-busy="Adding">+ Add</button></div>
+          <div style="display:flex;gap:8px"><input id="loc-new-dv" class="cell-in" placeholder="Add division manually" maxlength="80" required><button class="btn primary sm" data-busy="Adding">+ Add</button></div>
         </form>
-        ${divsFiltered.length ? h`<div class="scroll-x" style="max-height:320px;overflow-y:auto"><table class="tbl"><thead><tr><th>Division</th><th>State</th><th>Region</th><th>Active</th></tr></thead><tbody>
-          ${divsFiltered.map(d => h`<tr><td><b>${d.Division}</b></td><td>${d.State}</td><td>${d.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="division" data-id="${d.id}" data-reg="${d.Region}" data-st="${d.State}" data-name="${d.Division}" ${d.Active ? 'checked' : ''}><span></span></label></td></tr>`)}
-        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No divisions yet</b>Select a Region &amp; State above to add divisions.</div>`}
+        ${divsFiltered.length ? h`<div class="scroll-x" style="max-height:320px;overflow-y:auto"><table class="tbl"><thead><tr><th>Division</th><th>State</th><th>Region</th><th>Active</th><th></th></tr></thead><tbody>
+          ${divsFiltered.map(d => h`<tr><td><b>${d.Division}</b></td><td>${d.State}</td><td>${d.Region}</td><td><label class="sw"><input type="checkbox" data-ch="locactive" data-kind="division" data-id="${d.id}" data-reg="${d.Region}" data-st="${d.State}" data-name="${d.Division}" ${d.Active ? 'checked' : ''}><span></span></label></td><td><button type="button" class="btn ghost sm" data-act="delloc" data-kind="division" data-id="${d.id}" title="Delete unused division">✕</button></td></tr>`)}
+        </tbody></table></div>` : h`<div class="empty" style="padding:20px"><b>No divisions yet</b>Select a Region &amp; State above and type a Division name to add it.</div>`}
       </section>
     </div>
   </div>`);
@@ -2785,12 +2908,12 @@ const IMPORT_SCHEMAS = {
     cols: ['EmpCode', 'EmpName', 'Role', 'AppRole', 'Region', 'State', 'Division', 'Nazim', 'Email', 'Password'],
     aliases: { empcode: 'EmpCode', employeecode: 'EmpCode', code: 'EmpCode', empname: 'EmpName', fullname: 'EmpName', name: 'EmpName', role: 'Role', jobrole: 'Role', designation: 'Role', approle: 'AppRole', taskscope: 'AppRole', scope: 'AppRole', region: 'Region', state: 'State', division: 'Division', office: 'Division', nazim: 'Nazim', manager: 'Nazim', managercode: 'Nazim', email: 'Email', password: 'Password', initialpassword: 'Password' },
     sample: meta => {
-      const r0 = meta.regions[0] || 'Delhi';
-      const st0 = ((meta.states || []).find(s => s.Region === r0) || {}).State || '';
-      const dv0 = ((meta.divisions || []).find(d => d.Region === r0 && (!st0 || d.State === st0)) || {}).Division || 'Head Office';
+      const r0 = meta.regions[0] || 'North Region';
+      const st0 = ((meta.states || []).find(s => s.Region === r0) || {}).State || 'Delhi';
+      const dv0 = ((meta.divisions || []).find(d => d.Region === r0 && (!st0 || d.State === st0)) || {}).Division || 'Central Division';
       return [
-        { EmpCode: 'EMP101', EmpName: 'Example Supervisor', Role: (meta.roles[1] || meta.roles[0] || 'Accountant Supervisor'), AppRole: 'State Admin', Region: r0, State: st0, Division: dv0, Nazim: '', Email: 'emp101@example.com', Password: 'ChangeMe@123' },
-        { EmpCode: 'EMP102', EmpName: 'Example Staff', Role: (meta.roles[0] || 'Accountant'), AppRole: 'User', Region: r0, State: st0, Division: dv0, Nazim: 'EMP101', Email: 'emp102@example.com', Password: 'ChangeMe@456' }
+        { EmpCode: 'EMP101', EmpName: 'Example Supervisor', Role: (meta.roles[1] || meta.roles[0] || 'Manager'), AppRole: 'State Admin', Region: r0, State: st0, Division: dv0, Nazim: '', Email: 'emp101@example.com', Password: 'ChangeMe@123' },
+        { EmpCode: 'EMP102', EmpName: 'Example Staff', Role: (meta.roles[0] || 'Staff'), AppRole: 'User', Region: r0, State: st0, Division: dv0, Nazim: 'EMP101', Email: 'emp102@example.com', Password: 'ChangeMe@456' }
       ];
     },
     notes: [
@@ -2818,17 +2941,19 @@ const IMPORT_SCHEMAS = {
     ]
   },
   roles: {
-    title: 'Roles',
-    sub: 'Bulk-create new job roles and Head Office / Admin permissions (max 200/upload).',
+    title: 'Roles & Hierarchy',
+    sub: 'Bulk-create custom roles and parent-child reporting hierarchy (max 200/upload).',
     file: 'TaskManagement_Roles_Template',
-    cols: ['Role', 'IsHeadOffice', 'IsAdmin', 'Active'],
-    aliases: { role: 'Role', rolename: 'Role', designation: 'Role', isheadoffice: 'IsHeadOffice', headoffice: 'IsHeadOffice', isadmin: 'IsAdmin', admin: 'IsAdmin', active: 'Active' },
+    cols: ['Role', 'ParentRole', 'IsHeadOffice', 'IsAdmin', 'Active'],
+    aliases: { role: 'Role', rolename: 'Role', designation: 'Role', parentrole: 'ParentRole', parent: 'ParentRole', reportsto: 'ParentRole', isheadoffice: 'IsHeadOffice', headoffice: 'IsHeadOffice', isadmin: 'IsAdmin', admin: 'IsAdmin', active: 'Active' },
     sample: () => [
-      { Role: 'Regional Auditor', IsHeadOffice: 'N', IsAdmin: 'N', Active: 'Y' },
-      { Role: 'Compliance Reviewer', IsHeadOffice: 'Y', IsAdmin: 'N', Active: 'Y' }
+      { Role: 'Regional Manager', ParentRole: 'Admin', IsHeadOffice: 'N', IsAdmin: 'N', Active: 'Y' },
+      { Role: 'Division Supervisor', ParentRole: 'Regional Manager', IsHeadOffice: 'N', IsAdmin: 'N', Active: 'Y' },
+      { Role: 'Field Executive', ParentRole: 'Division Supervisor', IsHeadOffice: 'N', IsAdmin: 'N', Active: 'Y' }
     ],
     notes: [
       'Role: Unique role name (max 80 chars). Existing roles are skipped.',
+      'ParentRole: Optional senior role name (builds the Role Hierarchy tree).',
       'IsHeadOffice / IsAdmin / Active: Enter Y or N (Active defaults to Y).'
     ]
   },
@@ -2839,7 +2964,7 @@ const IMPORT_SCHEMAS = {
     cols: ['Title', 'Description', 'AllDesignations', 'Roles', 'Active'],
     aliases: { title: 'Title', tasktitle: 'Title', templatetitle: 'Title', description: 'Description', desc: 'Description', notes: 'Description', alldesignations: 'AllDesignations', all: 'AllDesignations', roles: 'Roles', designations: 'Roles', active: 'Active' },
     sample: meta => [
-      { Title: 'Prepare monthly salary register', Description: 'Compile attendance, deductions, and final payroll sheet.', AllDesignations: 'N', Roles: (meta.roles[0] || 'Accountant'), Active: 'Y' },
+      { Title: 'Prepare monthly salary register', Description: 'Compile attendance, deductions, and final payroll sheet.', AllDesignations: 'N', Roles: (meta.roles[0] || 'Field Executive'), Active: 'Y' },
       { Title: 'Weekly compliance self-review', Description: 'Verify all branch vouchers are uploaded.', AllDesignations: 'Y', Roles: '', Active: 'Y' }
     ],
     notes: [
@@ -3521,9 +3646,73 @@ const ACT = {
   newtpl: () => openTemplate(''), edittpl: el => openTemplate(el.dataset.id),
   deltpl: el => { if (!window.confirm('Delete this template? Tasks already created from it are not affected.')) return; busy(el, async () => { try { await api('apiDeleteTemplate', S.token, el.dataset.id); closeDrawer(true); toast('Template deleted.'); if (inAdmin('templates')) adminTemplates(); } catch (e) { if (!e.auth) toast(e.message, true); } }); },
   genpw: () => { const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', v = new Uint32Array(12); (window.crypto || window.msCrypto).getRandomValues(v); $('#pe-pw').value = Array.from(v, x => a[x % a.length]).join('') + '9'; },
-  addrole: () => { S.admin.roles.push({ Role: '', Level: 20, Chain: 'Custom', IsHeadOffice: false, IsAdmin: false, Active: true, isNew: true }); paintRoles(); },
+  addrole: () => { S.admin.roles.push({ Role: '', ParentRole: '', Level: 1, Chain: 'Custom', IsHeadOffice: false, IsAdmin: false, Active: true, isNew: true }); paintRoles(); },
   rmrole: el => { S.admin.roles.splice(Number(el.dataset.i), 1); paintRoles(); },
-  saveroles: el => busy(el, async () => { const err = $('#rl-err'); err.hidden = true; try { await api('apiSaveRoles', S.token, S.admin.roles.map(r => ({ Role: r.Role, Level: r.Level, Chain: r.Chain, IsHeadOffice: r.IsHeadOffice, IsAdmin: r.IsAdmin, Active: r.Active }))); toast('Roles saved.'); adminRoles(); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
+  rmunusedroles: () => {
+    const inUse = S.admin.roleInUse || {};
+    const before = S.admin.roles.length;
+    S.admin.roles = S.admin.roles.filter(r => r.Role === 'Admin' || !!inUse[r.Role]);
+    const kept = new Set(S.admin.roles.map(r => r.Role));
+    S.admin.roles.forEach(r => { if (r.ParentRole && !kept.has(r.ParentRole)) r.ParentRole = ''; });
+    toast(`Removed ${before - S.admin.roles.length} unused role(s). Click "Save roles & hierarchy" to apply.`);
+    paintRoles();
+  },
+  saveroles: el => busy(el, async () => { const err = $('#rl-err'); err.hidden = true; try { await api('apiSaveRoles', S.token, S.admin.roles.map(r => ({ Role: r.Role, ParentRole: r.ParentRole || '', Level: r.Level, Chain: r.Chain, IsHeadOffice: r.IsHeadOffice, IsAdmin: r.IsAdmin, Active: r.Active }))); toast('Roles & hierarchy saved.'); adminRoles(); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
+  delloc: el => {
+    const kind = el.dataset.kind, id = el.dataset.id;
+    if (!window.confirm(`Delete this ${kind}?`)) return;
+    busy(el, async () => { try { await api('apiDeleteLocation', S.token, kind, id); toast('Deleted.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } });
+  },
+  clearunusedlocs: el => {
+    if (!window.confirm('Remove all Regions, States, and Divisions that are not assigned to any employee?')) return;
+    busy(el, async () => { try { const r = await api('apiClearUnusedLocations', S.token); toast(r.removed ? `Removed ${r.removed} unused location(s).` : 'All locations are currently in use.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } });
+  },
+  qaddreg: el => busy(el, async () => {
+    const name = ($('#pe-new-reg')?.value || '').trim();
+    if (!name) return toast('Enter a Region name.', true);
+    try {
+      await api('apiSaveLocation', S.token, 'region', { Region: name, Active: true });
+      if (!S.admin.regionNames.includes(name)) S.admin.regionNames = S.admin.regionNames.concat([name]).sort();
+      const regEl = $('#pe-region'), box = $('#pe-add-reg-box'), stEl = $('#pe-state'), dvEl = $('#pe-div');
+      if (regEl) regEl.innerHTML = personRegionOptionsHtml(name);
+      if (box) box.hidden = true;
+      if ($('#pe-new-reg')) $('#pe-new-reg').value = '';
+      if (stEl) stEl.innerHTML = personStateOptionsHtml(name, '');
+      if (dvEl) dvEl.innerHTML = personDivisionOptionsHtml(name, '', '');
+      toast(`Region "${name}" added.`);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  }),
+  qaddst: el => busy(el, async () => {
+    const reg = $('#pe-region')?.value || '';
+    const pick = $('#pe-new-st-sel')?.value || '';
+    const name = (pick === '__CUSTOM__' ? ($('#pe-new-st-txt')?.value || '') : pick).trim();
+    if (!reg || reg === '__NEW__') return toast('Select a Region first.', true);
+    if (!name) return toast('Choose or enter a State name.', true);
+    try {
+      await api('apiSaveLocation', S.token, 'state', { Region: reg, State: name, Active: true });
+      if (!S.admin.states.some(s => s.Region === reg && s.State === name)) S.admin.states.push({ Region: reg, State: name });
+      const stEl = $('#pe-state'), box = $('#pe-add-st-box'), dvEl = $('#pe-div');
+      if (stEl) stEl.innerHTML = personStateOptionsHtml(reg, name);
+      if (box) box.hidden = true;
+      if (dvEl) dvEl.innerHTML = personDivisionOptionsHtml(reg, name, '');
+      toast(`State "${name}" added under ${reg}.`);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  }),
+  qadddv: el => busy(el, async () => {
+    const reg = $('#pe-region')?.value || '', st = $('#pe-state')?.value || '';
+    const name = ($('#pe-new-dv')?.value || '').trim();
+    if (!reg || reg === '__NEW__' || !st || st === '__NEW__') return toast('Select a Region and State first.', true);
+    if (!name) return toast('Enter a Division name.', true);
+    try {
+      await api('apiSaveLocation', S.token, 'division', { Region: reg, State: st, Division: name, Active: true });
+      if (!S.admin.divisions.some(d => d.Region === reg && d.State === st && d.Division === name)) S.admin.divisions.push({ Region: reg, State: st, Division: name });
+      const dvEl = $('#pe-div'), box = $('#pe-add-dv-box');
+      if (dvEl) dvEl.innerHTML = personDivisionOptionsHtml(reg, st, name);
+      if (box) box.hidden = true;
+      if ($('#pe-new-dv')) $('#pe-new-dv').value = '';
+      toast(`Division "${name}" added under ${st}.`);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  }),
   addsched: () => { S.admin.sched.push({ Role: '', Region: '', DayOfWeek: 1, DayOfMonth: '', Active: 'Y' }); paintSched(); },
   rmsched: el => { S.admin.sched.splice(Number(el.dataset.i), 1); paintSched(); },
   savesched: el => busy(el, async () => { const err = $('#sc-err'); err.hidden = true; try { await api('apiSaveSchedule', S.token, S.admin.sched.map(s => ({ Role: s.Role, Region: s.Region, DayOfWeek: s.DayOfWeek, DayOfMonth: s.DayOfMonth, Active: s.Active === 'Y' }))); toast('Schedule saved.'); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
@@ -3564,7 +3753,12 @@ const FORMS = {
   saveperson: f => savePerson(f, findSubmitBtn(f)),
   savetemplate: f => saveTemplate(f, findSubmitBtn(f)),
   addregion: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'region', { Region: $('#loc-new-reg').value, Active: true }); toast('Region added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  addstate: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'state', { Region: $('#loc-st-reg').value, State: $('#loc-new-st').value, Active: true }); toast('State added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  addstate: f => busy($('button', f), async () => {
+    const pick = $('#loc-st-pick') ? $('#loc-st-pick').value : '';
+    const stateName = (pick === '__CUSTOM__' ? ($('#loc-new-st') ? $('#loc-new-st').value : '') : pick).trim();
+    if (!stateName) return toast('Choose or enter a State name.', true);
+    try { await api('apiSaveLocation', S.token, 'state', { Region: $('#loc-st-reg').value, State: stateName, Active: true }); toast('State added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); }
+  }),
   adddivision: f => busy($('button', f), async () => { try { await api('apiSaveLocation', S.token, 'division', { Region: $('#loc-dv-reg').value, State: $('#loc-dv-st').value, Division: $('#loc-new-dv').value, Active: true }); toast('Division added.'); adminLocations(); } catch (e) { if (!e.auth) toast(e.message, true); } })
 };
 document.addEventListener('click', e => {
@@ -3626,16 +3820,39 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.id === 'imp-file' && el.files && el.files[0]) { handleImportFile(el.files[0]); return; }
   if (el.dataset.ch === 'peregion') {
-    const reg = el.value;
+    const reg = el.value, addBox = $('#pe-add-reg-box');
+    if (addBox) addBox.hidden = reg !== '__NEW__';
+    if (reg === '__NEW__') { $('#pe-new-reg')?.focus(); return; }
     const stEl = $('#pe-state'), dvEl = $('#pe-div');
-    if (stEl) { stEl.innerHTML = personStateOptionsHtml(reg, ''); }
-    if (dvEl) { dvEl.innerHTML = personDivisionOptionsHtml(reg, '', ''); }
+    if (stEl) stEl.innerHTML = personStateOptionsHtml(reg, '');
+    if (dvEl) dvEl.innerHTML = personDivisionOptionsHtml(reg, '', '');
+    if ($('#pe-add-st-box')) $('#pe-add-st-box').hidden = true;
+    if ($('#pe-add-dv-box')) $('#pe-add-dv-box').hidden = true;
     return;
   }
   if (el.dataset.ch === 'pestate') {
-    const reg = $('#pe-region') ? $('#pe-region').value : '', st = el.value;
+    const reg = $('#pe-region') ? $('#pe-region').value : '', st = el.value, addBox = $('#pe-add-st-box');
+    if (addBox) addBox.hidden = st !== '__NEW__';
+    if (st === '__NEW__') { $('#pe-new-st-sel')?.focus(); return; }
     const dvEl = $('#pe-div');
-    if (dvEl) { dvEl.innerHTML = personDivisionOptionsHtml(reg, st, ''); }
+    if (dvEl) dvEl.innerHTML = personDivisionOptionsHtml(reg, st, '');
+    if ($('#pe-add-dv-box')) $('#pe-add-dv-box').hidden = true;
+    return;
+  }
+  if (el.dataset.ch === 'penewstsel') {
+    const txt = $('#pe-new-st-txt');
+    if (txt) { txt.hidden = el.value !== '__CUSTOM__'; if (el.value === '__CUSTOM__') txt.focus(); }
+    return;
+  }
+  if (el.dataset.ch === 'pediv') {
+    const addBox = $('#pe-add-dv-box');
+    if (addBox) addBox.hidden = el.value !== '__NEW__';
+    if (el.value === '__NEW__') $('#pe-new-dv')?.focus();
+    return;
+  }
+  if (el.dataset.ch === 'locstpick') {
+    const txt = $('#loc-new-st');
+    if (txt) { txt.hidden = el.value !== '__CUSTOM__'; txt.required = el.value === '__CUSTOM__'; if (el.value === '__CUSTOM__') txt.focus(); }
     return;
   }
   if (el.dataset.ch === 'locfreg') { S.admin.locReg = el.value; S.admin.locState = ''; paintLocations(); return; }
@@ -3701,7 +3918,11 @@ document.addEventListener('change', e => {
 document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('pin')) pickerShow(e.target.closest('.picker')); });
 function bindChange(el) {
   const kind = el.dataset.bind, i = Number(el.dataset.i), k = el.dataset.k;
-  if (kind === 'roles') { const r = S.admin.roles[i]; r[k] = el.type === 'checkbox' ? el.checked : (k === 'Level' ? Number(el.value) : el.value); }
+  if (kind === 'roles') {
+    const r = S.admin.roles[i];
+    r[k] = el.type === 'checkbox' ? el.checked : (k === 'Level' ? Number(el.value) : el.value);
+    if (k === 'ParentRole' || el.type === 'checkbox') paintRoles();
+  }
   else if (kind === 'sched') {
     const s = S.admin.sched[i];
     if (k === 'Active') s.Active = el.checked ? 'Y' : 'N';
