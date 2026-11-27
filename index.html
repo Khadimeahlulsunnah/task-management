@@ -220,10 +220,10 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .qdue{display:flex;gap:6px;margin:10px 0 16px}.qpill{min-height:34px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font-weight:600;font-size:.86rem;cursor:pointer}
 .qpill[aria-pressed=true]{background:var(--brand-s);border-color:var(--brand);color:var(--brand-d)}
 .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-2px}.chips::-webkit-scrollbar{display:none}.chip-btn{flex:none}
-@media(hover:hover){.select-task{opacity:0;transition:opacity .15s}.row:hover .select-task,.select-task:checked,.select-task:focus-visible{opacity:1}}
+@media(hover:hover){.select-task{opacity:0;transition:opacity .15s}.row:hover .select-task,.kb-card:hover .select-task,.select-task:checked,.select-task:focus-visible{opacity:1}}
 
 /* adaptive shell: bottom bar on phones, side rail on desktop */
-.rail{display:contents}.newbtn,.rail .profile{display:none}.top .brand{flex:1}
+.rail{display:contents}.newbtn,.cmdbtn,.rail .profile{display:none}.top .brand{flex:1}.top-cmd{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--paper);cursor:pointer;font-size:.95rem}
 .top{padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top))}
 .tabs{position:fixed;z-index:30;left:0;right:0;bottom:0;justify-content:space-around;gap:0;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line)}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:50px;padding:6px 2px;font-size:.7rem;border-radius:12px}
@@ -238,8 +238,8 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 }
 @media(min-width:860px){
   .rail{display:flex;flex-direction:column;position:fixed;z-index:30;left:0;top:0;bottom:0;width:232px;padding:20px 14px;gap:6px;background:var(--surface);border-right:1px solid var(--line)}
-  .rail .top{position:static;padding:0 8px 12px;border:0;background:none}.top .avatar,.fab{display:none}
-  .newbtn{display:inline-flex;margin-bottom:10px}
+  .rail .top{position:static;padding:0 8px 12px;border:0;background:none}.top .avatar,.top-cmd,.fab{display:none}
+  .newbtn,.cmdbtn{display:inline-flex;margin-bottom:8px}
   .tabs{position:static;flex-direction:column;justify-content:flex-start;gap:2px;padding:0;border:0;background:none}
   .tab{flex:none;flex-direction:row;gap:12px;justify-content:flex-start;padding:0 12px;min-height:42px;font-size:.95rem}
   .tab[aria-current=page]{background:var(--brand-s);color:var(--brand-d)}
@@ -375,6 +375,11 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .nx-hero-gauge span{font-size:.78rem;color:#cbd5e1}
 
 .nx-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.nx-health{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.nx-hcard{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:13px 15px;display:grid;gap:4px}
+.nx-hcard-top{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.8rem;font-weight:600;color:var(--muted)}
+.nx-hcard-val{font-size:1.42rem;font-weight:700;line-height:1.15;color:var(--ink)}
+.nx-hcard-sub{font-size:.76rem;color:var(--muted)}
 .nx-kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 16px;text-align:left;cursor:pointer;font:inherit;color:inherit;display:grid;gap:6px;transition:transform .15s,box-shadow .15s,border-color .15s;position:relative;overflow:hidden}
 .nx-kpi:hover{transform:translateY(-2px);border-color:var(--line2);box-shadow:0 8px 20px rgba(15,23,42,.06)}
 .nx-kpi[aria-pressed=true]{box-shadow:0 0 0 2px var(--nx-indigo);border-color:var(--nx-indigo)}
@@ -457,6 +462,120 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .nx-task-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%;font:inherit;transition:background .15s,border-color .15s}
 .nx-task-row:hover{background:var(--hover);border-color:var(--line2)}
 
+/* Task View Switcher + Calendar + 14-Day Congestion Heatmap */
+.view-seg{display:inline-flex;border:1px solid var(--line2);border-radius:var(--r);background:var(--surface);overflow:hidden;flex:none}
+.view-seg button{border:0;background:transparent;padding:0 11px;height:36px;font-size:.84rem;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:background .15s,color .15s}
+.view-seg button:hover{background:var(--hover);color:var(--ink)}
+.view-seg button[aria-pressed=true]{background:var(--brand-s);color:var(--brand-d)}
+
+.hm-strip{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:6px}
+.hm-cell{border:1px solid var(--line);border-radius:12px;padding:8px 4px;background:var(--paper);cursor:pointer;display:grid;justify-items:center;gap:3px;text-align:center;font:inherit;color:inherit;transition:transform .12s,border-color .15s,box-shadow .15s;min-width:0}
+.hm-cell:hover{transform:translateY(-2px);border-color:var(--line2)}
+.hm-cell[aria-pressed=true]{box-shadow:0 0 0 2px var(--brand);border-color:var(--brand)}
+.hm-cell.is-wknd{opacity:.88}
+.hm-wk{font-size:.68rem;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.02em}
+.hm-dt{font-size:.92rem;font-weight:700;color:var(--ink);line-height:1.1}
+.hm-cnt{font-size:.72rem;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.35}
+.hm-0{background:var(--paper)}.hm-0 .hm-cnt{color:var(--muted);background:transparent}
+.hm-1{background:var(--nx-emerald-s);border-color:rgba(16,185,129,.25)}.hm-1 .hm-cnt{background:var(--nx-emerald);color:#fff}
+.hm-2{background:var(--nx-sky-s);border-color:rgba(2,132,199,.25)}.hm-2 .hm-cnt{background:var(--nx-sky);color:#fff}
+.hm-3{background:var(--nx-amber-s);border-color:rgba(245,158,11,.35)}.hm-3 .hm-cnt{background:var(--nx-amber);color:#111827}
+.hm-4{background:var(--nx-rose-s);border-color:rgba(239,68,68,.38)}.hm-4 .hm-cnt{background:var(--nx-rose);color:#fff}
+
+.cal-wrap{display:grid;gap:14px}
+.cal-shell{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:12px}
+.cal-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cal-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cal-title{font-size:1.08rem;font-weight:700;color:var(--ink);margin:0 6px}
+.cal-summary{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal-dow{text-align:center;font-size:.75rem;font-weight:700;color:var(--muted);padding:4px 0;text-transform:uppercase;letter-spacing:.03em}
+.cal-cell{min-height:98px;border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:6px;display:flex;flex-direction:column;gap:4px;cursor:pointer;text-align:left;min-width:0;transition:border-color .15s,background .15s,box-shadow .15s}
+.cal-cell:hover{border-color:var(--line2);background:var(--hover)}
+.cal-cell.is-out{opacity:.44;background:var(--surface)}
+.cal-cell.is-today{border-color:var(--brand);background:var(--brand-s)}
+.cal-cell[aria-selected=true]{box-shadow:0 0 0 2px var(--nx-indigo);border-color:var(--nx-indigo)}
+.cal-cell-head{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.cal-daynum{font-size:.82rem;font-weight:700;color:var(--ink);line-height:1}
+.cal-cell.is-today .cal-daynum{color:var(--brand-d)}
+.cal-badge{font-size:.68rem;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.cal-badge.over{background:var(--nx-rose-s);color:var(--nx-rose)}
+.cal-badge.open{background:var(--nx-sky-s);color:var(--nx-sky)}
+.cal-badge.done{background:var(--nx-emerald-s);color:var(--ok)}
+.cal-pills{display:grid;gap:3px;min-width:0}
+.cal-pill{font-size:.72rem;font-weight:600;padding:2px 6px;border-radius:6px;border:0;background:var(--surface);color:var(--ink);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;border-left:3px solid var(--muted);display:block;width:100%}
+.cal-pill:hover{filter:brightness(.96)}
+.cal-pill.is-over{border-left-color:var(--nx-rose);background:var(--nx-rose-s);color:var(--nx-rose)}
+.cal-pill.is-prog{border-left-color:var(--nx-sky);background:var(--nx-sky-s);color:var(--ink)}
+.cal-pill.is-pend{border-left-color:var(--nx-amber);background:var(--nx-amber-s);color:var(--ink)}
+.cal-pill.is-done{border-left-color:var(--nx-emerald);opacity:.72;text-decoration:line-through}
+.cal-more{font-size:.7rem;font-weight:700;color:var(--muted);padding-left:4px}
+.cal-dots{display:none;gap:3px;flex-wrap:wrap;margin-top:auto}
+.cal-dot{width:7px;height:7px;border-radius:50%}
+.cal-agenda{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px}
+.cal-agenda-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* Priority Pills, Segmented Picker & Personal Stats Strip */
+.pri{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+.pri-Urgent{background:var(--nx-rose-s);color:var(--nx-rose);border:1px solid rgba(239,68,68,.28)}
+.pri-High{background:var(--nx-amber-s);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+.pri-Normal{background:var(--soft);color:var(--muted)}
+.pri-Low{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+
+.pri-seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pri-btn{min-height:36px;padding:4px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--surface);font-size:.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:all .15s}
+.pri-btn:hover:not(:disabled){border-color:var(--brand);background:var(--hover)}
+.pri-btn[aria-pressed=true]{border-color:var(--brand);background:var(--brand-s);color:var(--brand-d);box-shadow:0 0 0 1px var(--brand)}
+.pri-btn[data-p="Urgent"][aria-pressed=true]{border-color:var(--nx-rose);background:var(--nx-rose-s);color:var(--nx-rose);box-shadow:0 0 0 1px var(--nx-rose)}
+.pri-btn[data-p="High"][aria-pressed=true]{border-color:var(--nx-amber);background:var(--nx-amber-s);color:var(--warn);box-shadow:0 0 0 1px var(--nx-amber)}
+.pri-btn:disabled{opacity:.42;cursor:not-allowed;background:var(--soft)}
+
+.my-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.my-stat{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 13px;display:grid;gap:2px}
+.my-stat small{font-size:.76rem;color:var(--muted);font-weight:600}
+.my-stat b{font-size:1.18rem;line-height:1.2;color:var(--ink)}
+.my-stat span{font-size:.74rem;color:var(--muted)}
+
+/* Kanban Board */
+.kb-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.kb-col{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:10px;min-height:240px;transition:border-color .15s,background .15s}
+.kb-col.is-drop{border-color:var(--brand);background:var(--brand-s)}
+.kb-col-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 4px 6px;border-bottom:1px solid var(--line)}
+.kb-col-title{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:.92rem;color:var(--ink)}
+.kb-dot{width:9px;height:9px;border-radius:50%}
+.kb-list{display:grid;gap:8px}
+.kb-card{background:var(--paper);border:1px solid var(--line);border-left:4px solid transparent;border-radius:12px;padding:11px 12px;display:grid;gap:7px;cursor:pointer;transition:transform .12s,border-color .15s,box-shadow .15s}
+.kb-card:hover{border-color:var(--line2);background:var(--hover);box-shadow:0 4px 12px rgba(15,23,42,.05)}
+.kb-card.is-over{border-left-color:var(--bad)}.kb-card.is-prog{border-left-color:var(--brand)}.kb-card.is-done{opacity:.78}
+.kb-card.is-done .kb-title{text-decoration:line-through;color:var(--muted)}
+.kb-card-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.kb-title{font-weight:600;font-size:.9rem;color:var(--ink);line-height:1.35;word-break:break-word}
+.kb-meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:.76rem;color:var(--muted);align-items:center}
+.kb-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-top:4px;border-top:1px dashed var(--line)}
+.kb-moves{display:flex;gap:4px;flex-wrap:wrap}
+.kb-mv{border:1px solid var(--line2);background:var(--surface);border-radius:8px;padding:2px 8px;font-size:.72rem;font-weight:600;cursor:pointer;color:var(--ink)}
+.kb-mv:hover{border-color:var(--brand);color:var(--brand-d)}
+
+/* Ctrl+K Command Palette */
+.cmd-backdrop{position:fixed;inset:0;z-index:90;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px 16px}
+.cmd-box{width:min(620px,100%);background:var(--surface);border:1px solid var(--line2);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;display:grid}
+.cmd-in-wrap{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.cmd-in-wrap input{flex:1;border:0;background:transparent;font-size:1rem;outline:none;min-width:0}
+.cmd-list{max-height:56vh;overflow-y:auto;padding:8px;display:grid;gap:4px}
+.cmd-sec{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 10px 2px}
+.cmd-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:0;border-radius:10px;background:transparent;text-align:left;width:100%;cursor:pointer;color:var(--ink)}
+.cmd-item:hover,.cmd-item[aria-selected=true]{background:var(--brand-s);color:var(--brand-d)}
+.cmd-item small{color:var(--muted);font-size:.78rem}
+
+/* Print-Ready Executive Dashboard */
+@media print{
+  body,.page{background:#fff!important;color:#111827!important;padding:0!important;margin:0!important}
+  .rail,.fab,#toasts,#bar,#ack-root,.nx-controls,.nx-tabs,.nx-filters,.btn,.view-seg{display:none!important}
+  .nx-topbar,.nx-card,.nx-kpi,.nx-hcard,.nx-hero,.cal-shell,.cal-agenda{box-shadow:none!important;break-inside:avoid;border-color:#d1d5db!important}
+  .nx-hero{background:#1e293b!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .nx-shell{gap:10px!important}
+}
+
 /* Pop-up modal screen for per-task due date & description */
 .task-modal-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:tmFadeIn .16s ease-out}
 .task-modal-card{background:var(--surface);border-radius:18px;box-shadow:0 24px 38px 3px rgba(0,0,0,.14),0 9px 46px 8px rgba(0,0,0,.12);width:100%;max-width:520px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line);animation:tmSlideUp .2s cubic-bezier(.16,1,.3,1)}
@@ -508,6 +627,8 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   .nx-hero h3{font-size:1.05rem!important}
   .nx-hero-gauge{width:100%;justify-content:space-between}
   .nx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .nx-health,.my-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .kb-board{grid-template-columns:1fr!important}
   .nx-kpi{padding:12px!important;border-radius:12px!important}
   .nx-kpi:last-child{grid-column:1/-1!important}
   .nx-kpi-val{font-size:1.5rem!important}
@@ -519,6 +640,13 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   .nx-filter-pills{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;padding-bottom:4px}
   .nx-filter-pills::-webkit-scrollbar{display:none}
   .nx-task-row{flex-direction:column!important;align-items:stretch!important;gap:8px!important}
+  .hm-strip{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:5px!important}
+  .cal-shell,.cal-agenda{padding:12px!important;border-radius:14px!important}
+  .cal-grid{gap:4px!important}
+  .cal-cell{min-height:54px!important;padding:5px 4px!important;border-radius:9px!important}
+  .cal-pills,.cal-more{display:none!important}
+  .cal-dots{display:flex!important}
+  .cal-badge{font-size:.64rem!important;padding:0 4px!important}
   
   /* Task Rows & Filters */
   .row { flex-wrap: wrap !important; padding: 10px 12px !important; gap: 8px 10px !important; }
@@ -629,6 +757,7 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-hidden="true"><div class="dhead" id="dhead"></div><div class="dbody" id="dbody"></div><div class="dfoot" id="dfoot" hidden></div></aside>
 <div id="toasts" role="status" aria-live="polite"></div>
 <div id="ack-root"></div>
+<div id="cmd-root"></div>
 <script>
 (function () {
 'use strict';
@@ -680,9 +809,14 @@ function groupOf(t) {
 }
 const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
+const priBadge = p => {
+  const pr = p || 'Normal';
+  const icon = pr === 'Urgent' ? '🔴 ' : pr === 'High' ? '🟠 ' : pr === 'Low' ? '⚪ ' : '';
+  return h`<span class="pri pri-${pr}">${icon}${pr}</span>`;
+};
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, importType: 'people', importMeta: null, importPreview: null, importResult: null, importFileName: '', pick: {} };
+const S = { token: '', boot: null, view: 'mine', taskView: { mine: store.get('tm.v.mine') || 'list', team: store.get('tm.v.team') || 'list' }, calMonth: '', calDay: '', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, importType: 'people', importMeta: null, importPreview: null, importResult: null, importFileName: '', pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -876,10 +1010,12 @@ function renderApp() {
       <header class="top">
         <div class="brand">${b.app.name}</div>
         <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" class="top-cmd" data-act="opencmd" title="Quick jump (Ctrl+K)" aria-label="Quick jump">⌘</button>
           <button class="avatar" data-act="profile" title="${u.EmpName}" aria-label="My profile">${initials(u.EmpName)}</button>
         </div>
       </header>
       <button class="btn primary newbtn" data-act="newtask">+ New task <span class="kbd-hint" style="margin-left:6px;opacity:.8;background:transparent;border-color:rgba(255,255,255,.4);color:#fff">N</span></button>
+      <button type="button" class="btn sm cmdbtn" data-act="opencmd" style="width:100%;justify-content:space-between;font-weight:500;color:var(--muted)"><span>Quick jump…</span><span class="kbd-hint">Ctrl+K</span></button>
       <nav class="tabs" aria-label="Main">${tab('mine', 'My tasks')}${teamMgr && tab('dashboard', 'Dashboard')}${teamMgr && tab('team', 'Team')}${mgr && tab('mail', 'Email')}${u.isAdmin && tab('admin', 'Admin')}</nav>
       <div class="grow"></div>
       <button class="profile" data-act="profile" aria-label="My profile"><span class="avatar">${initials(u.EmpName)}</span><span><b>${u.EmpName}</b><small>${u.Role}${u.AppRole && u.AppRole !== 'User' ? ' · ' + u.AppRole : ''}</small></span></button>
@@ -935,7 +1071,7 @@ function showView(v) {
   if (v === 'dashboard') { renderDashboardShell(); loadDashboard(); return; }
   renderTasksShell(v);
   const age = Date.now() - (S.fresh[v] || 0);
-  if (!S.data[v] || age > 30000) loadList(v, { silent: !!S.data[v] });
+  if (!S.data[v] || age > 300000) loadList(v, { silent: !!S.data[v] });
 }
 
 function dashboardSelect(key, label, options, placeholder) {
@@ -975,24 +1111,27 @@ function renderDashboardShell() {
     const e = (o.employees || []).find(x => x.code === S.dashFilters.employee);
     activeFilters.push({ k: 'employee', label: 'Person: ' + (e ? e.name : S.dashFilters.employee) });
   }
+  if (S.dashFilters.priority) activeFilters.push({ k: 'priority', label: 'Priority: ' + S.dashFilters.priority });
   if (S.dashFilters.status) activeFilters.push({ k: 'status', label: 'Showing: ' + (S.dashFilters.status === 'Overdue' ? 'Late' : S.dashFilters.status) });
 
-  const validTabs = ['overview', 'team', 'deadlines', 'areas', 'tasks'];
+  const validTabs = ['overview', 'team', 'deadlines', 'calendar', 'areas', 'tasks'];
   if (!validTabs.includes(S.dashTab)) S.dashTab = 'overview';
   const overdueCnt = d && d.counts ? (d.counts.Overdue || 0) : 0;
   const empCnt = d && d.byEmployee ? d.byEmployee.length : 0;
   const taskCnt = d && d.drilldown ? d.drilldown.total : 0;
+  const dueWeekCnt = d && d.summary ? (d.summary.dueThisWeek || 0) : 0;
 
   mount($('#view'), h`<div class="nx-shell">
     <header class="nx-topbar">
       <div class="nx-toprow">
         <div class="nx-title">
           <h2>Team Dashboard</h2>
-          <p>${d ? 'Updated ' + d.asOf : 'Loading your team summary…'}</p>
+          <p>${d ? (d.fromCache ? 'Cached snapshot (' + d.asOf + ') · 0 task reads' : 'Synced ' + d.asOf) : 'Loading your team summary…'}</p>
         </div>
         <div class="nx-controls">
           <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filters ▾'}${activeCount ? h` <span class="nx-tab-cnt">${activeCount}</span>` : ''}</button>
           ${activeCount ? h`<button type="button" class="btn sm danger" data-act="dashreset">Clear</button>` : ''}
+          <button type="button" class="btn sm" data-act="printdash" title="Print or save Dashboard as PDF">🖨 Print</button>
           <button type="button" class="btn sm primary" data-act="refreshdashboard" data-busy="Updating">Refresh</button>
         </div>
       </div>
@@ -1004,6 +1143,7 @@ function renderDashboardShell() {
         ${canSeeRoles ? dashboardSelect('role', 'Job Role', o.roles || [], 'All roles') : ''}
         ${isAdmin ? dashboardSelect('nazim', 'Nazim', o.nazims || [], 'All Nazims') : ''}
         ${dashboardSelect('employee', 'Team Member', o.employees || [], 'Everyone')}
+        ${dashboardSelect('priority', 'Priority', ['Urgent', 'High', 'Normal', 'Low'], 'All priorities')}
       </div>
 
       ${activeFilters.length ? h`<div class="nx-chips"><small class="muted" style="font-weight:600">Filtered by:</small>${activeFilters.map(f => h`<span class="nx-chip">${f.label}<button type="button" data-act="dashclearfilter" data-k="${f.k}" title="Remove filter">✕</button></span>`)}</div>` : ''}
@@ -1012,6 +1152,7 @@ function renderDashboardShell() {
         <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="overview" aria-pressed="${S.dashTab === 'overview'}">Overview</button>
         <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="team" aria-pressed="${S.dashTab === 'team'}">People ${d ? h`<span class="nx-tab-cnt">${empCnt}</span>` : ''}</button>
         <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="deadlines" aria-pressed="${S.dashTab === 'deadlines'}">Deadlines ${overdueCnt ? h`<span class="nx-tab-cnt alert">${overdueCnt} late</span>` : ''}</button>
+        <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="calendar" aria-pressed="${S.dashTab === 'calendar'}">Calendar ${dueWeekCnt ? h`<span class="nx-tab-cnt">${dueWeekCnt}</span>` : ''}</button>
         <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="areas" aria-pressed="${S.dashTab === 'areas'}">Areas &amp; Roles</button>
         <button type="button" class="nx-tab" role="tab" data-act="dashtab" data-t="tasks" aria-pressed="${S.dashTab === 'tasks'}">Find Tasks ${d ? h`<span class="nx-tab-cnt">${taskCnt}</span>` : ''}</button>
       </nav>
@@ -1031,6 +1172,7 @@ function paintDashboard() {
   if (S.dashTab === 'overview') paintDashboardOverview(box, d);
   else if (S.dashTab === 'team') paintDashboardTeam(box, d);
   else if (S.dashTab === 'deadlines') paintDashboardDeadlines(box, d);
+  else if (S.dashTab === 'calendar') paintDashboardCalendar(box, d);
   else if (S.dashTab === 'areas') paintDashboardAreas(box, d);
   else paintDashboardTasks(box, d);
 }
@@ -1148,6 +1290,12 @@ function paintDashboardOverview(box, d) {
 
   const alerts = (d.topOverdue || []).slice(0, 4);
   const unconfirmed = (d.awaitingConfirmList || []).slice(0, 4);
+  const fmtHrs = hrs => hrs == null ? '—' : (hrs < 1 ? Math.round(hrs * 60) + 'm' : hrs < 24 ? hrs + 'h' : (Math.round(hrs / 2.4) / 10) + 'd');
+  const netWk = sm.netDeltaThisWeek || 0;
+  const net6 = sm.netDelta6Weeks || 0;
+  const ackTone = (sm.unconfirmed24h || 0) > 0 ? 'amber' : 'emerald';
+  const netTone = netWk <= 0 ? 'emerald' : 'amber';
+  const reworkTone = (sm.reopenRate || 0) > 10 ? 'rose' : (sm.reopenedCount || 0) > 0 ? 'amber' : 'emerald';
 
   mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
     <section class="nx-hero">
@@ -1168,6 +1316,29 @@ function paintDashboardOverview(box, d) {
       ${kpi('In Progress', 'Working Now', prog, pct(prog) + '% active work', 'k-sky')}
       ${kpi('Completed', 'Finished', done, d.completionRate + '% done rate', 'k-emerald')}
       ${kpi('Overdue', 'Late Tasks', late, late ? 'Needs immediate follow-up' : 'Nothing late', 'k-rose')}
+    </div>
+
+    <div class="nx-health" aria-label="Execution velocity and health metrics">
+      <div class="nx-hcard">
+        <div class="nx-hcard-top"><span>Receipt Speed</span><span class="nx-pill ${ackTone}">${sm.unconfirmed24h ? sm.unconfirmed24h + ' >24h' : 'Fast ack'}</span></div>
+        <div class="nx-hcard-val num">${fmtHrs(sm.avgAckHours)}</div>
+        <div class="nx-hcard-sub">${sm.unconfirmed48h ? sm.unconfirmed48h + ' waiting over 48h' : 'Avg time from assign to confirm'}</div>
+      </div>
+      <div class="nx-hcard">
+        <div class="nx-hcard-top"><span>Avg Cycle Time</span><span class="nx-pill sky">${sm.onTimeRate == null ? 100 : sm.onTimeRate}% on time</span></div>
+        <div class="nx-hcard-val num">${sm.avgCycleDays != null ? sm.avgCycleDays + 'd' : '—'}</div>
+        <div class="nx-hcard-sub">${sm.avgLeadDays != null ? 'Lead: ' + sm.avgLeadDays + 'd created → done' : 'Appears once tasks finish'}</div>
+      </div>
+      <div class="nx-hcard">
+        <div class="nx-hcard-top"><span>Weekly Net Flow</span><span class="nx-pill ${netTone}">${netWk <= 0 ? 'Clearing' : 'Growing'}</span></div>
+        <div class="nx-hcard-val num" style="color:${netWk > 0 ? 'var(--warn)' : 'var(--ok)'}">${netWk > 0 ? '+' + netWk : netWk}</div>
+        <div class="nx-hcard-sub">${sm.createdThisWeek || 0} added vs ${sm.completedThisWeek || 0} finished (7d)</div>
+      </div>
+      <div class="nx-hcard">
+        <div class="nx-hcard-top"><span>Rework / Reopened</span><span class="nx-pill ${reworkTone}">${sm.reopenRate || 0}%</span></div>
+        <div class="nx-hcard-val num">${sm.reopenedCount || 0}</div>
+        <div class="nx-hcard-sub">${sm.totalReopens ? sm.totalReopens + ' total reopen(s)' : 'No reopened tasks'}</div>
+      </div>
     </div>
 
     <div class="nx-grid-2">
@@ -1209,6 +1380,7 @@ function paintDashboardOverview(box, d) {
       <section class="nx-card">
         <div class="nx-card-head">
           <div><h3>Work Speed (Recent Weeks)</h3><small>New tasks added compared to tasks finished</small></div>
+          <span class="nx-pill ${net6 <= 0 ? 'emerald' : 'amber'} num">6-wk net: ${net6 > 0 ? '+' + net6 : net6}</span>
         </div>
         ${svgColumnChart(d.weekly || d.trends, 'Not enough task history yet.')}
       </section>
@@ -1245,6 +1417,7 @@ function paintDashboardTeam(box, d) {
   const lateStaff = employees.filter(x => (x.overdue || 0) > 0).length;
   const topFinishers = [...employees].filter(e => e.total > 0).sort((a, b) => (b.completed / b.total) - (a.completed / a.total) || b.completed - a.completed).slice(0, 4);
   const busiest = [...employees].filter(e => e.overdue > 0 || e.open > 0).sort((a, b) => b.overdue - a.overdue || b.open - a.open).slice(0, 4);
+  const wl = d.workload || {};
 
   mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
     <div class="nx-grid-2">
@@ -1270,8 +1443,15 @@ function paintDashboardTeam(box, d) {
 
     <section class="nx-card">
       <div class="nx-card-head">
-        <div><h3>All Team Members</h3><small>${employees.length} people · ${totalOpen} open tasks total</small></div>
-        <input class="cell-in" style="max-width:260px" type="search" placeholder="Find person by name or code…" value="${S.dashSearch || ''}" data-in="dashsearch" maxlength="100">
+        <div>
+          <h3>All Team Members</h3>
+          <small>${employees.length} people · ${totalOpen} open tasks total · Avg ${wl.avgOpen == null ? 0 : wl.avgOpen} open/person</small>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${wl.overloadedCount ? h`<span class="nx-pill rose num">${wl.overloadedCount} overloaded</span>` : ''}
+          ${wl.heavyCount ? h`<span class="nx-pill amber num">${wl.heavyCount} heavy</span>` : ''}
+          <input class="cell-in" style="max-width:240px" type="search" placeholder="Find person by name or code…" value="${S.dashSearch || ''}" data-in="dashsearch" maxlength="100">
+        </div>
       </div>
       ${filtered.length ? h`<div class="nx-grid-3">${filtered.map(x => {
         const t = x.total || 1;
@@ -1285,7 +1465,7 @@ function paintDashboardTeam(box, d) {
               <div class="nx-staff-name" title="${x.name}">${x.name}</div>
               <div class="nx-staff-role">${x.code}${x.role ? ' · ' + x.role : ''}${x.region ? ' · ' + x.region : ''}</div>
             </div>
-            ${x.overdue > 0 ? h`<span class="nx-pill rose">${x.overdue} late</span>` : x.completed === x.total && x.total > 0 ? h`<span class="nx-pill emerald">All done</span>` : ''}
+            ${x.overdue > 0 ? h`<span class="nx-pill rose">${x.overdue} late</span>` : x.loadBand === 'overloaded' ? h`<span class="nx-pill rose">Overloaded</span>` : x.loadBand === 'heavy' ? h`<span class="nx-pill amber">Heavy load</span>` : x.completed === x.total && x.total > 0 ? h`<span class="nx-pill emerald">All done</span>` : ''}
           </div>
           <div class="nx-staff-nums">
             <div><b class="num">${x.total}</b><span>Total</span></div>
@@ -1332,6 +1512,14 @@ function paintDashboardDeadlines(box, d) {
     { label: 'Still Open & Late', value: c.Overdue || 0, color: 'var(--nx-rose)', status: 'Overdue' }
   ];
   const overdueList = d.topOverdue || [], todayList = d.dueTodayList || [];
+  const age = d.ageBuckets || {};
+  const ageRows = [
+    { label: 'Fresh (0–3 days open)', val: age.d0_3 || 0, color: 'var(--nx-emerald)' },
+    { label: 'Active (4–7 days open)', val: age.d4_7 || 0, color: 'var(--nx-sky)' },
+    { label: 'Aging (8–14 days open)', val: age.d8_14 || 0, color: 'var(--nx-amber)' },
+    { label: 'Stale (15+ days open)', val: age.d15_plus || 0, color: 'var(--nx-rose)' }
+  ];
+  const maxAge = Math.max(1, ...ageRows.map(r => r.val));
 
   mount(box, h`<div style="display:grid;gap:14px;width:100%;min-width:0">
     <div class="nx-grid-2">
@@ -1377,7 +1565,222 @@ function paintDashboardDeadlines(box, d) {
         </button>`)}</div>` : h`<div class="empty" style="padding:24px"><b>Nothing due today</b><span>Check upcoming tasks in Overview.</span></div>`}
       </section>
     </div>
+
+    ${(d.upcomingLoad || []).length ? renderHeatmapCard(d.upcomingLoad, c.Overdue || 0, S.calDay || todayKey(), true) : ''}
+
+    <section class="nx-card">
+      <div class="nx-card-head">
+        <div><h3>Open Task Age Breakdown</h3><small>How long current pending &amp; in-progress tasks have been open</small></div>
+        ${sm.staleNoDue ? h`<span class="nx-pill amber num">${sm.staleNoDue} open &gt;7d with no deadline</span>` : h`<span class="nx-pill emerald">${(age.d15_plus || 0)} stale 15+d</span>`}
+      </div>
+      <div class="nx-hbar-list">
+        ${ageRows.map(r => h`<div class="nx-hbar-btn" style="cursor:default">
+          <div class="nx-hbar-top"><span>${r.label}</span><b class="num">${r.val}</b></div>
+          <div class="nx-hbar-track"><i style="width:${r.val ? Math.max(4, Math.round(r.val * 100 / maxAge)) : 0}%;background:${r.color}"></i></div>
+        </div>`)}
+      </div>
+    </section>
   </div>`);
+}
+
+function buildUpcomingLoadFromTasks(tasks) {
+  const today = todayKey(), base = toDate(today);
+  const wds = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const mos = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const out = [], map = {};
+  for (let i = 0; i < 14; i++) {
+    const dt = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+    const k = keyOf(dt);
+    const r = { date: k, dayNum: dt.getDate(), monthShort: mos[dt.getMonth()], weekday: wds[dt.getDay()], isToday: i === 0, isWeekend: dt.getDay() === 0 || dt.getDay() === 6, total: 0, open: 0, pending: 0, inProgress: 0, completed: 0 };
+    out.push(r); map[k] = r;
+  }
+  (tasks || []).forEach(t => {
+    const r = t.Due && map[t.Due];
+    if (!r) return;
+    r.total++;
+    if (t.Status === 'Completed') r.completed++; else r.open++;
+    if (t.Status === 'Pending') r.pending++;
+    if (t.Status === 'In Progress') r.inProgress++;
+  });
+  return out;
+}
+
+function renderHeatmapCard(upcomingLoad, overdueCount, selectedDay, showCalLink) {
+  const days = upcomingLoad || [];
+  const maxOpen = Math.max(1, ...days.map(x => x.open || 0));
+  const lvl = open => {
+    if (!open) return 'hm-0';
+    if (open >= Math.max(6, Math.ceil(maxOpen * 0.8))) return 'hm-4';
+    if (open >= Math.max(3, Math.ceil(maxOpen * 0.5))) return 'hm-3';
+    if (open >= 2) return 'hm-2';
+    return 'hm-1';
+  };
+  const peak = days.reduce((best, x) => (!best || x.open > best.open ? x : best), null);
+  const total14 = days.reduce((s, x) => s + (x.open || 0), 0);
+  return h`<section class="nx-card">
+    <div class="nx-card-head">
+      <div>
+        <h3>14-Day Deadline Congestion Heatmap</h3>
+        <small>${total14} open task${total14 === 1 ? '' : 's'} due over the next 14 days${peak && peak.open ? ' · Peak on ' + peak.weekday + ' ' + peak.dayNum + ' ' + peak.monthShort + ' (' + peak.open + ' open)' : ''}</small>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${overdueCount ? h`<span class="nx-pill rose">${overdueCount} already overdue</span>` : h`<span class="nx-pill emerald">0 overdue</span>`}
+        ${showCalLink ? h`<button type="button" class="btn sm ghost" data-act="dashtab" data-t="calendar">Open full calendar →</button>` : ''}
+      </div>
+    </div>
+    <div class="hm-strip" role="group" aria-label="Next 14 days workload">${days.map(x => h`
+      <button type="button" class="hm-cell ${lvl(x.open)} ${x.isWeekend ? 'is-wknd' : ''}" data-act="calday" data-d="${x.date}" aria-pressed="${selectedDay === x.date}" title="${x.weekday} ${x.dayNum} ${x.monthShort}: ${x.open} open, ${x.completed} completed">
+        <span class="hm-wk">${x.isToday ? 'Today' : x.weekday}</span>
+        <span class="hm-dt num">${x.dayNum}</span>
+        <span class="hm-cnt num">${x.open ? x.open : (x.completed ? '✓' : '—')}</span>
+      </button>`)}</div>
+    <div class="nx-chart-legend" style="font-size:.76rem">
+      <span><i style="background:var(--track)"></i> Clear</span>
+      <span><i style="background:var(--nx-emerald)"></i> Light</span>
+      <span><i style="background:var(--nx-sky)"></i> Moderate</span>
+      <span><i style="background:var(--nx-amber)"></i> Heavy</span>
+      <span><i style="background:var(--nx-rose)"></i> Peak spike</span>
+    </div>
+  </section>`;
+}
+
+function renderCalendarWidget(opt) {
+  const tasks = opt.tasks || [], calendarDays = opt.calendarDays || null;
+  const today = todayKey();
+  const monthKey = /^\d{4}-\d{2}$/.test(S.calMonth || '') ? S.calMonth : today.slice(0, 7);
+  const selectedDay = S.calDay || today;
+  const [yr, mo] = monthKey.split('-').map(Number);
+  const firstDay = new Date(yr, mo - 1, 1);
+  const monthLabel = firstDay.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const leadDays = (firstDay.getDay() + 6) % 7; // Monday = 0
+  const daysInMonth = new Date(yr, mo, 0).getDate();
+  const totalCells = Math.ceil((leadDays + daysInMonth) / 7) * 7;
+  const gridStart = new Date(yr, mo - 1, 1 - leadDays);
+
+  const byDate = {}, unscheduled = [];
+  tasks.forEach(t => {
+    if (!t.Due) { unscheduled.push(t); return; }
+    (byDate[t.Due] = byDate[t.Due] || []).push(t);
+  });
+
+  let mTotal = 0, mOver = 0, mDone = 0;
+  if (calendarDays) {
+    Object.keys(calendarDays).forEach(k => {
+      if (k.startsWith(monthKey + '-')) {
+        mTotal += calendarDays[k].total || 0;
+        mOver += calendarDays[k].overdue || 0;
+        mDone += calendarDays[k].completed || 0;
+      }
+    });
+  } else {
+    Object.keys(byDate).forEach(k => {
+      if (k.startsWith(monthKey + '-')) {
+        byDate[k].forEach(t => {
+          mTotal++;
+          if (t.Status === 'Completed') mDone++;
+          if (t.Overdue) mOver++;
+        });
+      }
+    });
+  }
+
+  const cells = [];
+  for (let i = 0; i < totalCells; i++) {
+    const dt = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const dk = keyOf(dt);
+    const inMonth = dt.getMonth() === (mo - 1);
+    const list = byDate[dk] || [];
+    const dayMeta = (calendarDays && calendarDays[dk]) || null;
+    const openCount = dayMeta ? dayMeta.open : list.filter(t => t.Status !== 'Completed').length;
+    const overCount = dayMeta ? dayMeta.overdue : list.filter(t => t.Overdue).length;
+    const doneCount = dayMeta ? dayMeta.completed : list.filter(t => t.Status === 'Completed').length;
+    const totalCount = dayMeta ? dayMeta.total : list.length;
+
+    const pillCls = t => t.Status === 'Completed' ? 'is-done' : t.Overdue ? 'is-over' : t.Status === 'In Progress' ? 'is-prog' : 'is-pend';
+    cells.push(h`<div class="cal-cell ${inMonth ? '' : 'is-out'} ${dk === today ? 'is-today' : ''}" data-act="calday" data-d="${dk}" role="button" tabindex="0" aria-selected="${selectedDay === dk}" aria-label="${dk}, ${totalCount} tasks">
+      <div class="cal-cell-head">
+        <span class="cal-daynum num">${dt.getDate()}</span>
+        ${overCount ? h`<span class="cal-badge over num">${overCount} late</span>` : openCount ? h`<span class="cal-badge open num">${openCount}</span>` : doneCount ? h`<span class="cal-badge done num">✓ ${doneCount}</span>` : ''}
+      </div>
+      ${list.length ? h`<div class="cal-pills">
+        ${list.slice(0, 3).map(t => h`<button type="button" class="cal-pill ${pillCls(t)}" data-act="open" data-id="${t.TaskID}" title="${t.Title}${t.AssignedToName ? ' · ' + t.AssignedToName : ''}">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</button>`)}
+        ${(totalCount > 3 || list.length > 3) ? h`<span class="cal-more">+${Math.max(totalCount, list.length) - 3} more</span>` : ''}
+      </div>` : ''}
+      ${totalCount ? h`<div class="cal-dots">
+        ${overCount ? h`<span class="cal-dot" style="background:var(--nx-rose)"></span>` : ''}
+        ${openCount > overCount ? h`<span class="cal-dot" style="background:var(--nx-sky)"></span>` : ''}
+        ${doneCount ? h`<span class="cal-dot" style="background:var(--nx-emerald)"></span>` : ''}
+      </div>` : ''}
+    </div>`);
+  }
+
+  const isUnsched = selectedDay === '__UNSCHED__';
+  const dayTasks = isUnsched ? unscheduled : (byDate[selectedDay] || []);
+  const dayMetaSel = (!isUnsched && calendarDays && calendarDays[selectedDay]) || null;
+  const dayTitle = isUnsched ? 'Tasks With No Due Date' : toDate(selectedDay).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  const canAddDay = opt.allowAdd && !isUnsched && selectedDay >= today;
+  const upcoming = opt.upcomingLoad || buildUpcomingLoadFromTasks(tasks);
+
+  return h`<div class="cal-wrap">
+    ${renderHeatmapCard(upcoming, opt.overdueCount || 0, selectedDay, false)}
+    <section class="cal-shell">
+      <div class="cal-bar">
+        <div class="cal-nav">
+          <button type="button" class="btn sm" data-act="calprev" aria-label="Previous month">◀</button>
+          <button type="button" class="btn sm" data-act="caltoday">Today</button>
+          <button type="button" class="btn sm" data-act="calnext" aria-label="Next month">▶</button>
+          <h3 class="cal-title">${monthLabel}</h3>
+        </div>
+        <div class="cal-summary">
+          <span class="nx-pill indigo num">${mTotal} due</span>
+          ${mOver ? h`<span class="nx-pill rose num">${mOver} late</span>` : ''}
+          <span class="nx-pill emerald num">${mDone} done</span>
+          ${unscheduled.length ? h`<button type="button" class="nx-fpill" data-act="calunsched" aria-pressed="${isUnsched}">No deadline (${unscheduled.length})</button>` : ''}
+        </div>
+      </div>
+
+      <div class="cal-grid" role="grid" aria-label="${monthLabel} calendar">
+        ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => h`<div class="cal-dow">${d}</div>`)}
+        ${cells}
+      </div>
+    </section>
+
+    <section class="cal-agenda" id="cal-agenda">
+      <div class="cal-agenda-head">
+        <div>
+          <h3>${dayTitle}</h3>
+          <small class="muted">${dayTasks.length ? `${dayTasks.length} task${dayTasks.length === 1 ? '' : 's'} shown` : (dayMetaSel && dayMetaSel.total ? `${dayMetaSel.total} tasks scheduled` : 'No tasks scheduled for this date')}</small>
+        </div>
+        ${canAddDay ? h`<button type="button" class="btn sm primary" data-act="caladd" data-d="${selectedDay}">+ Add task for ${fmtDate(selectedDay)}</button>` : ''}
+      </div>
+      ${dayTasks.length ? (opt.scope ? h`<div class="list">${dayTasks.map(t => taskRow(t, opt.scope))}</div>` : h`<div style="display:grid;gap:8px">${dayTasks.map(t => h`<button type="button" class="nx-task-row" data-act="open" data-id="${t.TaskID}">
+        <div class="nx-mini-main">
+          <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+          <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
+            <span class="task-origin">${taskOrigin(t)}</span>
+            <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
+            <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex:none">
+          ${t.NeedsAck ? h`<span class="nx-pill amber">Waiting confirm</span>` : ''}
+          <span class="st ${stClass(t.Status)}">${t.Status}</span>
+        </div>
+      </button>`)}</div>`) : h`<div class="empty" style="padding:20px"><b>Clear schedule</b><span>Select another day on the calendar or heatmap above.</span></div>`}
+      ${opt.hasMore ? h`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:4px"><small class="muted">Showing ${tasks.length} of ${opt.total} loaded tasks in this view.</small><button type="button" class="btn sm" data-act="loadmore" data-busy="Loading">Load more (${opt.total - tasks.length} left)</button></div>` : ''}
+    </section>
+  </div>`;
+}
+
+function paintDashboardCalendar(box, d) {
+  const c = d.counts || {};
+  mount(box, renderCalendarWidget({
+    tasks: d.calendarTasks || [],
+    calendarDays: d.calendarDays || {},
+    upcomingLoad: d.upcomingLoad || [],
+    overdueCount: c.Overdue || 0,
+    allowAdd: true
+  }));
 }
 
 function areaBarsCard(title, sub, items, filterKey, canClickFilter) {
@@ -1446,6 +1849,7 @@ function paintDashboardTasks(box, d) {
       <div class="nx-mini-main">
         <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
         <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
+          ${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : ''}
           <span class="task-origin">${taskOrigin(t)}</span>
           <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
           <span>${t.Region}${t.Division ? ' / ' + t.Division : ''}</span>
@@ -1462,12 +1866,14 @@ function paintDashboardTasks(box, d) {
   </section>`);
 }
 
-async function loadDashboard(silent) {
+async function loadDashboard(silent, forceRefresh) {
   const seq = ++S.dashSeq;
   const pageOffset = Number(S.dashFilters.offset) || 0, previous = S.dashboard;
-  if (!silent) { S.dashboard = null; paintDashboard(); }
+  if (!silent && !S.dashboard) { S.dashboard = null; paintDashboard(); }
   try {
-    const d = await api('apiDashboardData', S.token, S.dashFilters);
+    const payload = Object.assign({}, S.dashFilters);
+    if (forceRefresh) payload.forceRefresh = true;
+    const d = await api('apiDashboardData', S.token, payload);
     if (seq !== S.dashSeq || S.view !== 'dashboard') return;
     if (pageOffset && previous && previous.drilldown && d.drilldown) {
       d.drilldown.tasks = previous.drilldown.tasks.concat(d.drilldown.tasks);
@@ -1711,26 +2117,61 @@ function teamDivisionOptions(region, state) {
   return L.divisions || [];
 }
 function renderTasksShell(scope) {
-  const f = S.filters[scope], L = S.boot.lists || { regions: [], states: [], divisionsList: [], divisions: [], roles: [] };
+  const f = S.filters[scope], L = S.boot.lists || { regions: [], states: [], divisionsList: [], divisions: [], roles: [], priorities: ['Urgent', 'High', 'Normal', 'Low'] };
+  const rawMode = S.taskView && S.taskView[scope];
+  const mode = rawMode === 'calendar' ? 'calendar' : rawMode === 'board' ? 'board' : 'list';
   const opt = (arr, cur, all) => h`<option value="">${all}</option>${arr.map(x => h`<option ${x === cur ? 'selected' : ''}>${x}</option>`)}`;
   const stateOpts = teamStateOptions(f.region || '');
   const divOpts = teamDivisionOptions(f.region || '', f.state || '');
   mount($('#view'), h`<div class="hello"><div id="hello"></div>${scope === 'mine' && h`<form class="qa" data-form="quickadd"><input id="qa-t" maxlength="200" placeholder="Add a task for yourself…" aria-label="New task title" autocomplete="off"><button class="btn primary" data-busy="Adding">Add</button></form><div class="qdue" role="group" aria-label="Due date">${[[0, 'Today'], [1, 'Tomorrow'], [7, 'Next week']].map(x => h`<button type="button" class="qpill" data-act="qdue" data-d="${x[0]}" aria-pressed="${(S.qdue || 0) === x[0]}">${x[1]}</button>`)}</div>`}</div>
+    <div id="mystats"></div>
     <div id="chips" class="chips"></div>
     <div class="filters">
       <input class="search" data-in="filter" data-k="search" type="search" placeholder="${scope === 'team' ? 'Search tasks or people' : 'Search my tasks'}" value="${f.search || ''}" aria-label="Search" maxlength="100">
+      <select data-ch="filter" data-k="priority" aria-label="Priority">${opt(L.priorities || ['Urgent', 'High', 'Normal', 'Low'], f.priority, 'All priorities')}</select>
       ${scope === 'team' && h`<input data-in="filter" data-k="employee" type="search" placeholder="Person name or code" value="${f.employee || ''}" aria-label="Person" style="width:170px" maxlength="100">
       <select data-ch="filter" data-k="region" aria-label="Region">${opt(L.regions || [], f.region, 'All regions (India)')}</select>
       <select data-ch="filter" data-k="state" id="flt-state" aria-label="State">${opt(stateOpts, f.state, 'All states')}</select>
       <select data-ch="filter" data-k="division" id="flt-division" aria-label="Division">${opt(divOpts, f.division, 'All divisions')}</select>
       <select data-ch="filter" data-k="role" aria-label="Role">${opt(L.roles || [], f.role, 'All roles')}</select>`}
+      <div class="view-seg" role="group" aria-label="Task view mode">
+        <button type="button" data-act="taskview" data-m="list" aria-pressed="${mode === 'list'}">☰ List</button>
+        <button type="button" data-act="taskview" data-m="board" aria-pressed="${mode === 'board'}">📊 Board</button>
+        <button type="button" data-act="taskview" data-m="calendar" aria-pressed="${mode === 'calendar'}">📅 Calendar</button>
+      </div>
       <button type="button" class="btn sm" data-act="refreshlist" data-busy="Refreshing" title="Fetch latest tasks from server">↻ Refresh</button>
     </div>
     <div id="bulkbar"></div><div id="list"></div><div id="more" class="more-wrap"></div>`);
   renderChips(scope); renderList(scope);
 }
+function renderPersonalStats(scope) {
+  const box = $('#mystats'); if (!box) return;
+  if (scope !== 'mine' || !S.data.mine) { box.innerHTML = ''; return; }
+  const d = S.data.mine, list = d.tasks || [], c = d.counts || {}, pc = c.priority || {};
+  const lim = (S.boot && S.boot.app && S.boot.app.priorityLimits) || { Urgent: 3, High: 5 };
+  const completed = list.filter(t => t.Status === 'Completed');
+  let onTime = 0;
+  completed.forEach(t => {
+    const doneDay = t.Completed ? String(t.Completed).slice(0, 10) : '';
+    if (!t.Due || !doneDay || doneDay <= t.Due) onTime++;
+  });
+  const onTimePct = completed.length ? Math.round(onTime * 100 / completed.length) : (c.All ? Math.round(((c.All - (c.Overdue || 0)) * 100) / c.All) : 100);
+  const weekCutoff = addDays(-6);
+  const doneWeek = completed.filter(t => t.Completed && String(t.Completed).slice(0, 10) >= weekCutoff).length;
+  const next7 = list.filter(t => t.Status !== 'Completed' && t.Due && dayDiff(t.Due) >= 0 && dayDiff(t.Due) <= 7);
+  const next7Hi = next7.filter(t => t.Priority === 'Urgent' || t.Priority === 'High').length;
+  const openTotal = (c.Pending || 0) + (c['In Progress'] || 0);
+
+  mount(box, h`<div class="my-stats" aria-label="My personal progress">
+    <div class="my-stat"><small>On-Time Score</small><b class="num" style="color:${onTimePct >= 80 ? 'var(--ok)' : 'var(--warn)'}">${onTimePct}%</b><span>${completed.length ? onTime + ' of ' + completed.length + ' on time' : (c.Overdue ? c.Overdue + ' overdue' : 'All on track')}</span></div>
+    <div class="my-stat"><small>Done Last 7 Days</small><b class="num">${doneWeek}</b><span>${completed.length} total finished</span></div>
+    <div class="my-stat"><small>Due Next 7 Days</small><b class="num">${next7.length}</b><span>${next7Hi ? next7Hi + ' Urgent/High' : openTotal + ' total open'}</span></div>
+    <div class="my-stat"><small>Priority Caps</small><b class="num"><span style="color:var(--nx-rose)">U ${pc.Urgent || 0}/${lim.Urgent || 3}</span> · <span style="color:var(--warn)">H ${pc.High || 0}/${lim.High || 5}</span></b><span>Active high-priority load</span></div>
+  </div>`);
+}
 function renderChips(scope) {
   paintHello(scope);
+  renderPersonalStats(scope);
   const d = S.data[scope], c = (d && d.counts) || {}, f = S.filters[scope], active = f.overdue ? 'over' : (f.status || 'all');
   const chip = (key, label, n, cls) => h`<button class="chip-btn ${cls || ''}" data-act="chip" data-k="${key}" aria-pressed="${active === key}">${label} <b class="num">${n == null ? '–' : n}</b></button>`;
   mount($('#chips'), h`${chip('all', 'All', c.All)}${chip('over', 'Overdue', c.Overdue, 'over')}${chip('Pending', 'Pending', c.Pending)}${chip('In Progress', 'In progress', c['In Progress'])}${chip('Completed', 'Completed', c.Completed)}`);
@@ -1742,16 +2183,94 @@ function taskRow(t, scope) {
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
     <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
-    <div class="rmain"><div class="title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
+    <div class="rmain"><div class="title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div><div class="meta">${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : ''}<span class="task-origin">${taskOrigin(t)}</span>${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
     <div class="side"><span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
 }
+function renderKanbanBoard(scope, d) {
+  const cols = [
+    { status: 'Pending', label: 'Pending', dot: 'var(--nx-amber)' },
+    { status: 'In Progress', label: 'In Progress', dot: 'var(--nx-sky)' },
+    { status: 'Completed', label: 'Completed', dot: 'var(--nx-emerald)' }
+  ];
+  const tasks = d.tasks || [];
+  const moveButtons = t => {
+    if (!t.CanUpdate) return '';
+    if (t.NeedsAck) return h`<button type="button" class="kb-mv" data-act="acktask" data-id="${t.TaskID}" data-busy="…">✓ Start</button>`;
+    const lockPending = !t.SelfAssigned && !t.CanManage && !!t.ReceivedAt;
+    const btns = [];
+    if (t.Status === 'Pending') {
+      btns.push(h`<button type="button" class="kb-mv" data-act="kbmove" data-id="${t.TaskID}" data-s="In Progress">Start →</button>`);
+      btns.push(h`<button type="button" class="kb-mv" data-act="kbmove" data-id="${t.TaskID}" data-s="Completed">Done ✓</button>`);
+    } else if (t.Status === 'In Progress') {
+      if (!lockPending) btns.push(h`<button type="button" class="kb-mv" data-act="kbmove" data-id="${t.TaskID}" data-s="Pending">← Pending</button>`);
+      btns.push(h`<button type="button" class="kb-mv" data-act="kbmove" data-id="${t.TaskID}" data-s="Completed">Done ✓</button>`);
+    } else {
+      btns.push(h`<button type="button" class="kb-mv" data-act="kbmove" data-id="${t.TaskID}" data-s="In Progress">Reopen</button>`);
+    }
+    return h`${btns}`;
+  };
+  return h`<div class="kb-board" role="region" aria-label="Task Kanban board">${cols.map(c => {
+    const items = tasks.filter(t => t.Status === c.status);
+    return h`<section class="kb-col" data-col="${c.status}">
+      <div class="kb-col-head">
+        <span class="kb-col-title"><span class="kb-dot" style="background:${c.dot}"></span>${c.label}</span>
+        <span class="nx-tab-cnt num">${items.length}</span>
+      </div>
+      <div class="kb-list">
+        ${items.length ? items.map(t => {
+          const cls = t.Status === 'Completed' ? 'is-done' : t.Overdue ? 'is-over' : t.Status === 'In Progress' ? 'is-prog' : '';
+          return h`<article class="kb-card ${cls}" data-act="open" data-id="${t.TaskID}" draggable="${t.CanUpdate ? 'true' : 'false'}" tabindex="0">
+            <div class="kb-card-top">
+              <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
+                ${t.Priority && t.Priority !== 'Normal' ? priBadge(t.Priority) : h`<span class="muted" style="font-size:.72rem">${t.TaskID}</span>`}
+              </div>
+              <span class="due" style="font-size:.76rem;min-width:0;${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${dueText(t)}</span>
+            </div>
+            <div class="kb-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
+            <div class="kb-meta">
+              <span>${scope === 'team' ? '👤 ' + t.AssignedToName : taskOrigin(t)}</span>
+              ${scope === 'team' && t.Division ? h`<span>${t.Division}</span>` : ''}
+            </div>
+            <div class="kb-foot">
+              <div class="kb-moves">${moveButtons(t)}</div>
+            </div>
+          </article>`;
+        }) : h`<div class="empty" style="padding:18px 10px;font-size:.82rem">No ${c.label.toLowerCase()} tasks</div>`}
+      </div>
+    </section>`;
+  })}</div>`;
+}
+
 function renderList(scope) {
   const d = S.data[scope], box = $('#list'), more = $('#more'); if (!box) return;
+  const rawMode = S.taskView && S.taskView[scope];
+  const mode = rawMode === 'calendar' ? 'calendar' : rawMode === 'board' ? 'board' : 'list';
   if (!d) { mount(box, skeletonRows(5)); more.innerHTML = ''; renderBulkBar(scope); return; }
-  if (!d.tasks.length) {
+  if (!d.tasks.length && mode !== 'calendar') {
     const filtered = Object.keys(S.filters[scope]).some(k => S.filters[scope][k]);
     mount(box, h`<div class="empty"><b>${filtered ? 'No tasks match these filters' : scope === 'team' ? 'Nothing in your team yet' : 'You have no tasks'}</b>${filtered ? h`<button class="btn sm" data-act="clear">Clear filters</button>` : scope === 'mine' ? h`<span>Tasks assigned to you will appear here.</span> <button class="btn sm primary" data-act="newtask">Add a task for yourself</button>` : h`<span>Tasks assigned to people in your team will appear here.</span>`}</div>`);
     more.innerHTML = ''; renderBulkBar(scope); return;
+  }
+  if (mode === 'calendar') {
+    more.innerHTML = '';
+    const bulk = $('#bulkbar'); if (bulk) bulk.innerHTML = '';
+    const filteredEmpty = !d.tasks.length && Object.keys(S.filters[scope]).some(k => S.filters[scope][k]);
+    mount(box, h`${filteredEmpty ? h`<div class="notice warn" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span>No tasks match your active filters.</span><button type="button" class="btn sm" data-act="clear">Clear filters</button></div>` : ''}${renderCalendarWidget({
+      scope,
+      tasks: d.tasks,
+      overdueCount: (d.counts && d.counts.Overdue) || 0,
+      hasMore: !!d.hasMore,
+      total: d.total || d.tasks.length,
+      allowAdd: true
+    })}`);
+    return;
+  }
+  if (mode === 'board') {
+    mount(box, renderKanbanBoard(scope, d));
+    mount(more, d.hasMore ? h`<button class="btn" data-act="loadmore" data-busy="Loading">Show more (${d.total - d.tasks.length} left)</button>` : (d.total > 8 ? h`<small class="muted">${d.total} tasks</small>` : ''));
+    renderBulkBar(scope);
+    return;
   }
   const out = []; let last = '', open = false;
   d.tasks.forEach(t => {
@@ -1766,15 +2285,27 @@ function renderList(scope) {
 }
 function renderBulkBar(scope) {
   const box = $('#bulkbar'); if (!box) return;
-  const selected = S.selected[scope], visible = (S.data[scope] && S.data[scope].tasks || []).map(t => t.TaskID), count = selected.size;
+  const selected = S.selected[scope], count = selected.size;
   if (!count) { box.innerHTML = ''; return; }
-  mount(box, h`<div class="bulkbar" role="region" aria-label="Bulk task actions"><b>${count} selected</b><button class="btn sm" data-act="selectvisible" data-scope="${scope}">Select this page</button><select id="bulk-status" aria-label="Set status"><option value="">Change status to…</option>${S.boot.lists.statuses.map(x => h`<option>${x}</option>`)}</select><button class="btn primary sm" data-act="applybulk" data-scope="${scope}" data-busy="Updating">Apply</button><button class="btn sm" data-act="clearselection" data-scope="${scope}">Clear</button><small class="muted">Bulk updates apply to selected loaded tasks; load more for another page.</small></div>`);
+  const u = S.boot && S.boot.user || {};
+  const canReassign = !!(u.isNazim || u.isAdmin);
+  const assignable = canReassign ? (S.boot.people || []).filter(p => p.a) : [];
+  mount(box, h`<div class="bulkbar" role="region" aria-label="Bulk task actions">
+    <b>${count} selected</b>
+    <button class="btn sm" data-act="selectvisible" data-scope="${scope}">Select this page</button>
+    <select id="bulk-status" aria-label="Set status"><option value="">Change status to…</option>${S.boot.lists.statuses.map(x => h`<option>${x}</option>`)}</select>
+    <button class="btn primary sm" data-act="applybulk" data-scope="${scope}" data-busy="Updating">Apply</button>
+    ${canReassign && assignable.length ? h`<select id="bulk-assignee" aria-label="Reassign to employee"><option value="">Reassign to…</option>${assignable.map(p => h`<option value="${p.c}">${p.n} (${p.c})</option>`)}</select><button class="btn sm" data-act="applybulkreassign" data-scope="${scope}" data-busy="Moving">Reassign</button>` : ''}
+    <button class="btn sm" data-act="clearselection" data-scope="${scope}">Clear</button>
+    <small class="muted">Applies to selected loaded tasks.</small>
+  </div>`);
 }
 const raw = s => new Raw(s);
 async function loadList(scope, opt) {
   opt = opt || {};
   const seq = S.seq[scope] = (S.seq[scope] || 0) + 1, d = S.data[scope];
   const f = Object.assign({}, S.filters[scope], { scope, offset: opt.append && d ? d.nextOffset : 0 });
+  if (opt.forceRefresh) f.forceRefresh = true;
   if (!opt.silent && !opt.append) { S.data[scope] = null; if (S.view === scope) renderList(scope); }
   try {
     const r = await api('apiListTasks', S.token, f);
@@ -1789,12 +2320,29 @@ async function loadList(scope, opt) {
     else toast(e.message, true);
   }
 }
-const findTask = id => { for (const k of ['mine', 'team']) { const d = S.data[k]; const t = d && d.tasks.find(x => x.TaskID === id); if (t) return t; } const rows = S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks || []; const dt = rows.find(x => x.TaskID === id); if (dt) return dt; return S.openTask && S.openTask.TaskID === id ? S.openTask : null; };
-function updateRow(t) { const el = $('.row[data-id="' + CSS.escape(t.TaskID) + '"]'); if (!el) return; const scope = S.view === 'team' ? 'team' : 'mine'; const tmp = document.createElement('div'); mount(tmp, taskRow(t, scope)); el.replaceWith(tmp.firstElementChild); }
+const findTask = id => {
+  for (const k of ['mine', 'team']) { const d = S.data[k]; const t = d && d.tasks.find(x => x.TaskID === id); if (t) return t; }
+  if (S.dashboard) {
+    const pools = [S.dashboard.drilldown && S.dashboard.drilldown.tasks, S.dashboard.calendarTasks, S.dashboard.topOverdue, S.dashboard.dueTodayList, S.dashboard.awaitingConfirmList];
+    for (const p of pools) { const hit = Array.isArray(p) && p.find(x => x.TaskID === id); if (hit) return hit; }
+  }
+  return S.openTask && S.openTask.TaskID === id ? S.openTask : null;
+};
+function updateRow(t) {
+  const scope = S.view === 'team' ? 'team' : 'mine';
+  const vm = S.taskView && S.taskView[scope];
+  if ((S.view === 'mine' || S.view === 'team') && (vm === 'calendar' || vm === 'board')) {
+    renderList(scope);
+    return;
+  }
+  const el = $('.row[data-id="' + CSS.escape(t.TaskID) + '"]'); if (!el) return;
+  const tmp = document.createElement('div'); mount(tmp, taskRow(t, scope)); el.replaceWith(tmp.firstElementChild);
+}
 function taskMatchesFilter(t, f) {
   if (!f) return true;
   if (f.status && t.Status !== f.status) return false;
   if (f.overdue && !t.Overdue) return false;
+  if (f.priority && (t.Priority || 'Normal') !== f.priority) return false;
   if (f.region && t.Region !== f.region) return false;
   if (f.state && t.State !== f.state) return false;
   if (f.division && t.Division !== f.division) return false;
@@ -1810,7 +2358,7 @@ function taskMatchesFilter(t, f) {
   }
   return true;
 }
-function adjustCacheCounts(d, prevStatus, prevOverdue, nextStatus, nextOverdue) {
+function adjustCacheCounts(d, prevStatus, prevOverdue, nextStatus, nextOverdue, prevPrio, nextPrio) {
   if (!d || !d.counts) return;
   if (prevStatus == null && nextStatus != null) d.counts.All = (d.counts.All || 0) + 1;
   else if (prevStatus != null && nextStatus == null) d.counts.All = Math.max(0, (d.counts.All || 0) - 1);
@@ -1818,23 +2366,31 @@ function adjustCacheCounts(d, prevStatus, prevOverdue, nextStatus, nextOverdue) 
   if (nextStatus && prevStatus !== nextStatus) d.counts[nextStatus] = (d.counts[nextStatus] || 0) + 1;
   if (prevOverdue && !nextOverdue && d.counts.Overdue != null) d.counts.Overdue = Math.max(0, d.counts.Overdue - 1);
   else if (!prevOverdue && nextOverdue) d.counts.Overdue = (d.counts.Overdue || 0) + 1;
+  if (d.counts.priority) {
+    const wasOpen = prevStatus != null && prevStatus !== 'Completed';
+    const isOpen = nextStatus != null && nextStatus !== 'Completed';
+    const pp = prevPrio || 'Normal', np = nextPrio || pp;
+    if (wasOpen && (!isOpen || pp !== np)) d.counts.priority[pp] = Math.max(0, (d.counts.priority[pp] || 0) - 1);
+    if (isOpen && (!wasOpen || pp !== np)) d.counts.priority[np] = (d.counts.priority[np] || 0) + 1;
+  }
 }
 function applyStatus(t, status) {
   const prev = t.Status, wasOverdue = !!t.Overdue;
   const nextOverdue = status !== 'Completed' && !!t.Due && dayDiff(t.Due) < 0;
+  const compStamp = status === 'Completed' ? todayKey() + ' 00:00' : '';
   for (const k of ['mine', 'team']) {
     const d = S.data[k];
     const hit = d && d.tasks && d.tasks.find(x => x.TaskID === t.TaskID);
     if (hit) {
-      adjustCacheCounts(d, hit.Status, !!hit.Overdue, status, nextOverdue);
-      hit.Status = status; hit.Overdue = nextOverdue;
+      adjustCacheCounts(d, hit.Status, !!hit.Overdue, status, nextOverdue, hit.Priority, hit.Priority);
+      hit.Status = status; hit.Overdue = nextOverdue; hit.Completed = compStamp;
       S.fresh[k] = Date.now();
     }
   }
-  t.Status = status; t.Overdue = nextOverdue;
+  t.Status = status; t.Overdue = nextOverdue; t.Completed = compStamp;
   const dt = S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks && S.dashboard.drilldown.tasks.find(x => x.TaskID === t.TaskID);
-  if (dt) { dt.Status = status; dt.Overdue = nextOverdue; }
-  if (S.openTask && S.openTask.TaskID === t.TaskID) { S.openTask.Status = status; S.openTask.Overdue = nextOverdue; }
+  if (dt) { dt.Status = status; dt.Overdue = nextOverdue; dt.Completed = compStamp; }
+  if (S.openTask && S.openTask.TaskID === t.TaskID) { S.openTask.Status = status; S.openTask.Overdue = nextOverdue; S.openTask.Completed = compStamp; }
   if (S.view === 'mine' || S.view === 'team') renderChips(S.view);
 }
 function patchLocalTask(patch, opt) {
@@ -1848,18 +2404,18 @@ function patchLocalTask(patch, opt) {
       if (k === 'mine' && patch.Mine === false) {
         d.tasks.splice(idx, 1);
         d.total = Math.max(0, (d.total || 1) - 1);
-        adjustCacheCounts(d, cur.Status, !!cur.Overdue, null, false);
+        adjustCacheCounts(d, cur.Status, !!cur.Overdue, null, false, cur.Priority, null);
       } else {
         const prevS = cur.Status, prevO = !!cur.Overdue;
         const merged = Object.assign({}, cur, patch);
         merged.Overdue = patch.Overdue !== undefined ? !!patch.Overdue : (merged.Status !== 'Completed' && !!merged.Due && dayDiff(merged.Due) < 0);
-        adjustCacheCounts(d, prevS, prevO, merged.Status, merged.Overdue);
+        adjustCacheCounts(d, prevS, prevO, merged.Status, merged.Overdue, cur.Priority, merged.Priority);
         d.tasks[idx] = merged;
       }
       S.fresh[k] = Date.now();
     } else if (k === 'mine' && patch.Mine === true && patch.Title) {
       const added = Object.assign({}, patch);
-      adjustCacheCounts(d, null, false, added.Status, !!added.Overdue);
+      adjustCacheCounts(d, null, false, added.Status, !!added.Overdue, null, added.Priority);
       if (taskMatchesFilter(added, S.filters[k])) { d.tasks.unshift(added); d.total = (d.total || 0) + 1; }
       S.fresh[k] = Date.now();
     }
@@ -1886,7 +2442,7 @@ function insertLocalTasks(list) {
       if (!t || !t.TaskID || seen.has(t.TaskID)) continue;
       if (k === 'mine' && !t.Mine) continue;
       seen.add(t.TaskID);
-      adjustCacheCounts(d, null, false, t.Status, !!t.Overdue);
+      adjustCacheCounts(d, null, false, t.Status, !!t.Overdue, null, t.Priority);
       if (taskMatchesFilter(t, S.filters[k])) { toPrepend.push(t); d.total = (d.total || 0) + 1; }
     }
     if (toPrepend.length) d.tasks = toPrepend.reverse().concat(d.tasks);
@@ -1903,7 +2459,7 @@ function removeLocalTask(id) {
     if (idx >= 0) {
       const [removed] = d.tasks.splice(idx, 1);
       d.total = Math.max(0, (d.total || 1) - 1);
-      adjustCacheCounts(d, removed.Status, !!removed.Overdue, null, false);
+      adjustCacheCounts(d, removed.Status, !!removed.Overdue, null, false, removed.Priority, null);
       S.fresh[k] = Date.now();
     }
     if (S.selected[k]) S.selected[k].delete(id);
@@ -2026,6 +2582,7 @@ function taskBodyH(t) {
     </div>` : ''}
     <div class="sec"><dl class="kv">
       <dt>Assigned to</dt><dd>${t.AssignedToName} <small class="muted">${t.AssignedTo}</small></dd>
+      <dt>Priority</dt><dd>${priBadge(t.Priority)}</dd>
       <dt>Task type</dt><dd>${taskOrigin(t)}</dd>
       <dt>Assigned by</dt><dd>${t.AssignedByName}</dd>
       <dt>Due</dt><dd>
@@ -2075,11 +2632,14 @@ async function sendRemind(t, btn) {
 }
 function editTask(t) {
   const people = (S.boot.people || []).filter(p => p.a);
+  const me = S.boot.user, allowHigh = !!(me.isNazim || me.isAdmin) && !t.SelfAssigned && t.AssignedTo !== me.EmpCode;
+  const curP = t.Priority || 'Normal';
   openDrawer(dheadH('Edit task', t.TaskID), h`<form id="editForm" data-form="savetask" data-id="${t.TaskID}">
     <label class="field"><span>Title</span><input id="e-title" maxlength="200" value="${t.Title}" required autofocus></label>
     <label class="field"><span>Description</span><textarea id="e-desc" maxlength="2000">${t.Description}</textarea></label>
     <div class="two"><label class="field"><span>Due date</span><input id="e-due" type="date" value="${t.Due}" required></label>
-    <div class="field"><span>Assigned to</span>${pickerH('edit', people, t.AssignedTo)}</div></div>
+    <label class="field"><span>Priority</span><select id="e-prio">${['Urgent', 'High', 'Normal', 'Low'].map(p => h`<option value="${p}" ${curP === p ? 'selected' : ''} ${!allowHigh && (p === 'Urgent' || p === 'High') ? 'disabled' : ''}>${p}</option>`)}</select></label></div>
+    <div class="field"><span>Assigned to</span>${pickerH('edit', people, t.AssignedTo)}</div>
     <div id="e-err" class="notice bad" hidden></div></form>`,
     h`<button class="btn" data-act="canceledit" data-id="${t.TaskID}">Cancel</button><button class="btn primary" data-act="submitform" data-f="editForm" data-busy="Saving">Save changes</button>`);
 }
@@ -2087,7 +2647,7 @@ async function saveTask(form, btn) {
   const id = form.dataset.id, err = $('#e-err'); err.hidden = true;
   const to = $('.pval', form).value;
   await busy(btn, async () => {
-  try { const r = await api('apiUpdateTask', S.token, id, { title: $('#e-title').value, description: $('#e-desc').value, dueDate: $('#e-due').value, assignedTo: to }); toast('Task updated.'); S.openId = ''; closeDrawer(true); if (r && r.task) patchLocalTask(r.task); if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); } else { const t = findTask(id); if (t) { openTask(id); } } }
+  try { const r = await api('apiUpdateTask', S.token, id, { title: $('#e-title').value, description: $('#e-desc').value, dueDate: $('#e-due').value, priority: $('#e-prio')?.value, assignedTo: to }); toast('Task updated.'); S.openId = ''; closeDrawer(true); if (r && r.task) patchLocalTask(r.task); if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); } else { const t = findTask(id); if (t) { openTask(id); } } }
     catch (e) { err.textContent = e.message; err.hidden = false; }
   });
 }
@@ -2095,8 +2655,9 @@ async function saveTask(form, btn) {
 /* ---- new task (Single-Screen Clean Drawer Flow) ---- */
 function newRequestId() { const bytes = new Uint8Array(18); (window.crypto || window.msCrypto).getRandomValues(bytes); return Array.from(bytes, x => x.toString(16).padStart(2, '0')).join(''); }
 
-function newTask() {
+function newTask(presetDue) {
   const me = S.boot.user, canAssignOthers = !!(me.isNazim || me.isAdmin);
+  const initDue = (presetDue && /^\d{4}-\d{2}-\d{2}$/.test(presetDue) && presetDue >= todayKey()) ? presetDue : todayKey();
 
   S.draft = {
     targetMode: 'self',
@@ -2106,6 +2667,7 @@ function newTask() {
     tasks: [],
     assignees: new Set(),
     tpl: {},
+    priority: 'Normal',
     requestId: newRequestId()
   };
 
@@ -2174,7 +2736,7 @@ function newTask() {
       <div class="two">
         <label class="field" style="margin:0">
           <span style="font-size:.85rem;font-weight:600">Due Date</span>
-          <input id="n-due" type="date" required min="${todayKey()}" value="${todayKey()}" style="padding:6px 10px;min-height:38px">
+          <input id="n-due" type="date" required min="${todayKey()}" value="${initDue}" style="padding:6px 10px;min-height:38px">
         </label>
         <div class="field" style="margin:0">
           <span style="font-size:.85rem;font-weight:600">Quick Date</span>
@@ -2185,6 +2747,18 @@ function newTask() {
             <button type="button" data-act="due" data-d="7">Next Week</button>
           </div>
         </div>
+      </div>
+
+      <!-- PRIORITY -->
+      <div class="field" style="margin:12px 0 0">
+        <span style="font-size:.85rem;font-weight:600">Priority</span>
+        <div class="pri-seg" id="n-prio-seg" role="group" aria-label="Task priority" style="margin-top:4px">
+          <button type="button" class="pri-btn" data-act="setprio" data-p="Urgent" aria-pressed="false">🔴 Urgent</button>
+          <button type="button" class="pri-btn" data-act="setprio" data-p="High" aria-pressed="false">🟠 High</button>
+          <button type="button" class="pri-btn" data-act="setprio" data-p="Normal" aria-pressed="true">Normal</button>
+          <button type="button" class="pri-btn" data-act="setprio" data-p="Low" aria-pressed="false">Low</button>
+        </div>
+        <small id="n-prio-hint" class="hint"></small>
       </div>
 
       <!-- NOTE -->
@@ -2334,7 +2908,30 @@ function addTaskTitle(val) {
   if (i) i.focus();
 }
 
+function syncPriorityUi() {
+  const seg = $('#n-prio-seg'); if (!seg || !S.boot) return;
+  const me = S.boot.user, targets = selectedTargets();
+  const canAssignOthers = !!(me.isNazim || me.isAdmin);
+  const includesSelf = targets.some(p => p.c === me.EmpCode);
+  const allowHigh = canAssignOthers && !includesSelf && targets.length > 0;
+  if (!allowHigh && (S.draft.priority === 'Urgent' || S.draft.priority === 'High')) S.draft.priority = 'Normal';
+  const cur = S.draft.priority || 'Normal';
+  $$('.pri-btn', seg).forEach(b => {
+    const p = b.dataset.p;
+    b.disabled = !allowHigh && (p === 'Urgent' || p === 'High');
+    b.setAttribute('aria-pressed', String(p === cur));
+  });
+  const hint = $('#n-prio-hint');
+  if (hint) {
+    const lim = (S.boot.app && S.boot.app.priorityLimits) || { Urgent: 3, High: 5, Normal: 25, Low: 20 };
+    if (!canAssignOthers) hint.textContent = 'Self-tasks can be Normal or Low. Urgent & High are reserved for Nazim/Admin assignments.';
+    else if (includesSelf) hint.textContent = 'Self-tasks cannot be Urgent or High. Switch to Team (without Include myself) to set Urgent/High.';
+    else hint.textContent = `Limits per employee: Urgent ${lim.Urgent} · High ${lim.High} · Normal ${lim.Normal || '∞'} · Low ${lim.Low || '∞'} active tasks.`;
+  }
+}
+
 function paintDraftPreview() {
+  syncPriorityUi();
   const box = $('#n-preview'); if (!box) return;
   const targets = selectedTargets(), me = S.boot.user;
   const { entries, warnings } = selectedTemplateEntries();
@@ -2566,6 +3163,7 @@ async function createTask(form, btn) {
         tasks: taskTitles,
         description: $('#n-desc')?.value || '',
         dueDate: dueDate || todayKey(),
+        priority: S.draft.priority || 'Normal',
         assignedTo: to,
         templateGroups: tplGroups,
         confidential,
@@ -2603,12 +3201,29 @@ async function applyBulkStatus(scope, btn) {
       const r = await api('apiBulkUpdateTaskStatus', S.token, ids, status, remark || '');
       S.selected[scope].clear();
       const applied = Array.isArray(r.updatedIds) ? r.updatedIds : ids.filter(id => !(r.failed || []).some(f => f.id === id));
-      applied.forEach(id => patchLocalTask({ TaskID: id, Status: status }, { skipRender: true }));
+      const compStamp = status === 'Completed' ? todayKey() + ' 00:00' : '';
+      applied.forEach(id => patchLocalTask({ TaskID: id, Status: status, Completed: compStamp }, { skipRender: true }));
       if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
       syncOpenTask();
       const mailErrors = (r.failed || []).filter(x => /email|mail/i.test(x.reason)).length;
       toast(r.updated + ' task(s) updated.' + ((r.failed || []).length ? ' ' + r.failed.length + ' task(s) need review.' : '') + (mailErrors ? ' ' + mailErrors + ' reopen email(s) could not be sent.' : ''), !!mailErrors);
       if (r.failed && r.failed.length) console.warn('Bulk task update items needing review:', r.failed);
+    } catch (e) { if (!e.auth) toast(e.message, true); }
+  });
+}
+async function applyBulkReassign(scope, btn) {
+  const ids = Array.from(S.selected[scope]), to = $('#bulk-assignee')?.value || '';
+  if (!ids.length) return toast('Select at least one task.', true);
+  if (!to) return toast('Choose an employee to reassign to.', true);
+  await busy(btn, async () => {
+    try {
+      const r = await api('apiBulkReassignTasks', S.token, ids, to);
+      S.selected[scope].clear();
+      if (Array.isArray(r.updatedTasks)) r.updatedTasks.forEach(t => patchLocalTask(t, { skipRender: true }));
+      if (S.view === 'mine' || S.view === 'team') { renderChips(S.view); renderList(S.view); }
+      syncOpenTask();
+      toast(r.message || (r.updated + ' task(s) reassigned.'));
+      if (r.failed && r.failed.length) console.warn('Bulk reassign skipped items:', r.failed);
     } catch (e) { if (!e.auth) toast(e.message, true); }
   });
 }
@@ -3460,6 +4075,8 @@ async function adminSettings() {
     <div class="two"><label class="field"><span>Send reminders at</span><select id="DAILY_RUN_HOUR">${hours.map(x => h`<option value="${x[0]}" ${Number(s.DAILY_RUN_HOUR) === x[0] ? 'selected' : ''}>${x[1]}</option>`)}</select></label>
     <label class="field"><span>Stay signed in for</span><select id="SESSION_DAYS">${[1, 7, 14, 30, 60, 90, 180].map(d => h`<option value="${d}" ${Number(s.SESSION_DAYS) === d ? 'selected' : ''}>${d === 1 ? '1 day' : d + ' days'}</option>`)}</select><small class="hint">Anyone who uses the app regularly stays signed in.</small></label></div>
     <div class="two">${num('MIN_PASSWORD_LENGTH', 'Minimum password length', '', 6, 32)}${num('ARCHIVE_AFTER_DAYS', 'Archive tasks older than (days)', 'Moves completed tasks to TaskArchive during daily run', 7, 365)}</div>
+    <div class="two">${num('MAX_URGENT_TASKS', 'Max Urgent tasks per employee', 'Open limit (Nazim/Admin to employee only)', 1, 20)}${num('MAX_HIGH_TASKS', 'Max High tasks per employee', 'Open limit (Nazim/Admin to employee only)', 1, 30)}</div>
+    <div class="two">${num('MAX_NORMAL_TASKS', 'Max Normal tasks per employee', '0 = unlimited', 0, 200)}${num('MAX_LOW_TASKS', 'Max Low tasks per employee', '0 = unlimited', 0, 200)}</div>
     <div class="two"><label class="field"><span>Email greeting</span><input id="EMAIL_GREETING" value="${s.EMAIL_GREETING || 'Salam,'}" maxlength="100" required><small class="hint">e.g. Salam, or Dear,</small></label><label class="field"><span>Email sign-off</span><input id="EMAIL_SIGN_OFF" value="${s.EMAIL_SIGN_OFF || 'Jazakallahu Khaira!'}" maxlength="100" required><small class="hint">e.g. Jazakallahu Khaira! or Best regards,</small></label></div>
     <label class="field" style="display:flex;gap:12px;align-items:center"><span class="sw"><input id="ESCALATION_ENABLED" type="checkbox" ${s.ESCALATION_ENABLED === 'Y' ? 'checked' : ''}><span></span></span><span style="margin:0">Email managers a digest of their team's overdue tasks</span></label>
     <div id="st-err" class="notice bad" hidden></div><button class="btn primary" data-busy="Saving">Save settings</button></form>`);
@@ -3472,11 +4089,15 @@ async function saveSettings(form) {
     SESSION_DAYS: v('SESSION_DAYS'),
     MIN_PASSWORD_LENGTH: v('MIN_PASSWORD_LENGTH'),
     ARCHIVE_AFTER_DAYS: v('ARCHIVE_AFTER_DAYS'),
+    MAX_URGENT_TASKS: v('MAX_URGENT_TASKS'),
+    MAX_HIGH_TASKS: v('MAX_HIGH_TASKS'),
+    MAX_NORMAL_TASKS: v('MAX_NORMAL_TASKS'),
+    MAX_LOW_TASKS: v('MAX_LOW_TASKS'),
     EMAIL_GREETING: v('EMAIL_GREETING'),
     EMAIL_SIGN_OFF: v('EMAIL_SIGN_OFF'),
     ESCALATION_ENABLED: $('#ESCALATION_ENABLED').checked ? 'Y' : 'N'
   };
-  await busy($('button.btn.primary', form), async () => { try { const r = await api('apiSaveSettings', S.token, body); S.admin.settings = r.settings; S.boot.app.name = r.settings.APP_NAME; document.title = r.settings.APP_NAME; const b = $('.brand'); if (b) b.textContent = r.settings.APP_NAME; toast(r.timersReinstalled ? 'Saved. The reminder timer was moved to the new hour.' : 'Settings saved.'); } catch (e) { err.textContent = e.message; err.hidden = false; } });
+  await busy($('button.btn.primary', form), async () => { try { const r = await api('apiSaveSettings', S.token, body); S.admin.settings = r.settings; S.boot.app.name = r.settings.APP_NAME; S.boot.app.priorityLimits = { Urgent: Number(body.MAX_URGENT_TASKS) || 3, High: Number(body.MAX_HIGH_TASKS) || 5, Normal: Number(body.MAX_NORMAL_TASKS) || 0, Low: Number(body.MAX_LOW_TASKS) || 0 }; document.title = r.settings.APP_NAME; const b = $('.brand'); if (b) b.textContent = r.settings.APP_NAME; toast(r.timersReinstalled ? 'Saved. The reminder timer was moved to the new hour.' : 'Settings saved.'); } catch (e) { err.textContent = e.message; err.hidden = false; } });
 }
 
 function adminSystem() {
@@ -3491,10 +4112,13 @@ function paintTests(r) {
     ${Object.keys(groups).map(g => h`<h3 style="margin:16px 0 4px">${g === 'Logic' ? 'Rules' : g === 'Setup' ? 'Your setup' : 'Live walk-through'}</h3><ul class="tests">${groups[g].map(i => h`<li><span class="badge b-${i.status}">${i.status}</span><div><b>${i.name}</b>${i.detail && h`<small class="muted">${i.detail}</small>`}</div></li>`)}</ul>`)}`);
 }
 
-/* ================= shortcuts ================= */
+/* ================= shortcuts & Ctrl+K command palette ================= */
 function openShortcutsModal() {
   openDrawer(dheadH('Keyboard Shortcuts'), h`
     <div style="display:grid;gap:12px;padding:6px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+        <span>Quick Jump Command Palette</span><span class="kbd-hint">Ctrl+K</span>
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
         <span>Create new task</span><span class="kbd-hint">N</span>
       </div>
@@ -3509,6 +4133,117 @@ function openShortcutsModal() {
       </div>
     </div>
   `, h`<button class="btn primary" data-act="closedrawer">Got it</button>`);
+}
+
+let CMD_ITEMS = [];
+let CMD_IDX = 0;
+function closeCommandPalette() {
+  const root = $('#cmd-root');
+  if (root) root.innerHTML = '';
+  CMD_ITEMS = [];
+  CMD_IDX = 0;
+}
+function buildCommandItems(query) {
+  if (!S.token || !S.boot) return [];
+  const q = String(query || '').trim().toLowerCase();
+  const u = S.boot.user || {}, mgr = u.isNazim || u.isAdmin, teamMgr = !!u.hasTeam || mgr;
+  const items = [];
+  const add = (sec, label, meta, run) => {
+    if (!q || (sec + ' ' + label + ' ' + meta).toLowerCase().includes(q)) items.push({ sec, label, meta, run });
+  };
+  add('Actions', '+ Create New Task', 'Shortcut: N', () => newTask());
+  add('Views', 'My tasks', 'Personal workspace', () => showView('mine'));
+  if (teamMgr) add('Views', 'Dashboard Overview', 'Team KPIs & charts', () => { S.dashTab = 'overview'; showView('dashboard'); });
+  if (teamMgr) add('Views', 'Dashboard Calendar & Heatmap', '14-day congestion forecast', () => { S.dashTab = 'calendar'; showView('dashboard'); });
+  if (teamMgr) add('Views', 'Team Tasks', 'Tasks assigned to your team', () => showView('team'));
+  if (mgr) add('Views', 'Email Digests & Logs', 'Send or review reminders', () => showView('mail'));
+  if (u.isAdmin) add('Views', 'Admin Panel', 'People, roles, locations & settings', () => showView('admin'));
+  add('Actions', 'Toggle Dark / Light Theme', 'Switch appearance', () => {
+    const cur = store.get('tm.theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    store.set('tm.theme', next); applyPrefs(); toast('Theme: ' + next);
+  });
+  add('Actions', 'Keyboard Shortcuts', 'Shortcut: ?', () => openShortcutsModal());
+
+  // Loaded tasks (0 extra reads)
+  const seenIds = new Set();
+  const taskPools = [
+    ...(S.data.mine && S.data.mine.tasks || []),
+    ...(S.data.team && S.data.team.tasks || []),
+    ...(S.dashboard && S.dashboard.drilldown && S.dashboard.drilldown.tasks || []),
+    ...(S.dashboard && S.dashboard.calendarTasks || [])
+  ];
+  let taskMatches = 0;
+  for (const t of taskPools) {
+    if (!t || !t.TaskID || seenIds.has(t.TaskID)) continue;
+    seenIds.add(t.TaskID);
+    const title = t.Title || t.TaskID;
+    const meta = [t.Status, t.Priority && t.Priority !== 'Normal' ? t.Priority : '', t.AssignedToName].filter(Boolean).join(' · ');
+    if (!q && taskMatches >= 5) continue;
+    if (!q || (title + ' ' + meta + ' ' + t.TaskID).toLowerCase().includes(q)) {
+      items.push({ sec: 'Tasks', label: title, meta, run: () => openTask(t.TaskID) });
+      taskMatches++;
+      if (taskMatches >= 8) break;
+    }
+  }
+
+  // Team members (for Nazims / Admins)
+  if (teamMgr && Array.isArray(S.boot.people)) {
+    let empMatches = 0;
+    for (const p of S.boot.people) {
+      const meta = [p.c, p.r, p.g].filter(Boolean).join(' · ');
+      if (!q && empMatches >= 4) break;
+      if (!q || (p.n + ' ' + meta).toLowerCase().includes(q)) {
+        items.push({
+          sec: 'People',
+          label: p.n,
+          meta,
+          run: () => { S.dashFilters.employee = p.c; delete S.dashFilters.offset; S.dashTab = 'tasks'; showView('dashboard'); }
+        });
+        empMatches++;
+        if (empMatches >= 6) break;
+      }
+    }
+  }
+  return items;
+}
+function paintCommandList(query) {
+  CMD_ITEMS = buildCommandItems(query);
+  if (CMD_IDX >= CMD_ITEMS.length) CMD_IDX = Math.max(0, CMD_ITEMS.length - 1);
+  const box = $('#cmd-list'); if (!box) return;
+  if (!CMD_ITEMS.length) {
+    mount(box, h`<div class="empty" style="padding:20px">No matching views, tasks, or people.</div>`);
+    return;
+  }
+  let lastSec = '';
+  const out = [];
+  CMD_ITEMS.forEach((it, i) => {
+    if (it.sec !== lastSec) { lastSec = it.sec; out.push(h`<div class="cmd-sec">${it.sec}</div>`); }
+    out.push(h`<button type="button" class="cmd-item" data-act="cmdpick" data-i="${i}" aria-selected="${i === CMD_IDX}">
+      <span><b>${it.label}</b></span>
+      <small>${it.meta}</small>
+    </button>`);
+  });
+  mount(box, h`${out}`);
+  const sel = $('.cmd-item[aria-selected="true"]', box);
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+function openCommandPalette() {
+  if (!S.token || !S.boot || isAckLocked()) return;
+  const root = $('#cmd-root'); if (!root) return;
+  CMD_IDX = 0;
+  mount(root, h`<div class="cmd-backdrop" data-act="closecmd" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="cmd-box">
+      <div class="cmd-in-wrap">
+        <span style="color:var(--muted);font-weight:700">⌘</span>
+        <input id="cmd-in" type="search" placeholder="Jump to view, task, or team member…" autocomplete="off" maxlength="100">
+        <span class="kbd-hint">Esc</span>
+      </div>
+      <div id="cmd-list" class="cmd-list"></div>
+    </div>
+  </div>`);
+  paintCommandList('');
+  setTimeout(() => { const inp = $('#cmd-in'); if (inp) inp.focus(); }, 20);
 }
 
 /* ================= events ================= */
@@ -3578,11 +4313,17 @@ const ACT = {
   selectvisible: el => { const sc = el.dataset.scope, set = S.selected[sc]; ((S.data[sc] && S.data[sc].tasks) || []).forEach(t => { if (t.CanUpdate && set.size < 100) set.add(t.TaskID); }); renderList(sc); },
   clearselection: el => { const sc = el.dataset.scope; S.selected[sc].clear(); renderList(sc); },
   applybulk: (el, e) => { e.stopPropagation(); applyBulkStatus(el.dataset.scope, el); },
+  applybulkreassign: (el, e) => { e.stopPropagation(); applyBulkReassign(el.dataset.scope, el); },
+  kbmove: (el, e) => { e.stopPropagation(); const t = findTask(el.dataset.id); if (t && el.dataset.s) setStatus(t, el.dataset.s); },
+  printdash: () => window.print(),
+  opencmd: () => openCommandPalette(),
+  closecmd: (el, e) => { if (e.target === el) closeCommandPalette(); },
+  cmdpick: el => { const item = CMD_ITEMS[Number(el.dataset.i)]; closeCommandPalette(); if (item && item.run) item.run(); },
   tick: el => { const t = findTask(el.dataset.id); if (t) setStatus(t, t.Status === 'Completed' ? 'Pending' : 'Completed'); },
   status: el => { const t = S.openTask; if (t) setStatus(t, el.dataset.s); },
   chip: el => { const sc = S.view, f = S.filters[sc], k = el.dataset.k; delete f.status; delete f.overdue; if (k === 'over') f.overdue = true; else if (k !== 'all') f.status = k; renderChips(sc); loadList(sc, { silent: true }); },
   clear: () => { S.filters[S.view] = {}; renderTasksShell(S.view); loadList(S.view, { silent: true }); },
-  retry: () => loadList(S.view), refreshlist: el => busy(el, () => (S.view === 'mine' || S.view === 'team') && loadList(S.view, { silent: true })), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
+  retry: () => loadList(S.view, { forceRefresh: true }), refreshlist: el => busy(el, () => (S.view === 'mine' || S.view === 'team') && loadList(S.view, { silent: true, forceRefresh: true })), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
   remind: el => S.openTask && askRemind(S.openTask, el), sendremind: el => S.openTask && sendRemind(S.openTask, el), cancelremind: () => S.openTask && mount($('#d-actions'), taskActionsH(S.openTask)),
   edittask: el => { const t = findTask(el.dataset.id); if (t) editTask(t); }, canceledit: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   deletetask: el => {
@@ -3666,6 +4407,7 @@ const ACT = {
           const box = $('#d-due-edit-box');
           if (box) box.hidden = true;
         }
+        if (S.view === 'dashboard') { delete S.dashFilters.offset; loadDashboard(true); }
       } catch (e) {
         if (!e.auth) toast(e.message, true);
       }
@@ -3739,12 +4481,76 @@ const ACT = {
     S.dashTab = 'tasks';
     loadDashboard();
   },
-  refreshdashboard: el => busy(el, async () => { await loadDashboard(true); }),
-  dashreset: () => { S.dashFilters = {}; S.dashTaskQuery = ''; S.dashboard = null; loadDashboard(); },
+  refreshdashboard: el => busy(el, async () => { delete S.dashFilters.offset; await loadDashboard(true, true); }),
+  dashreset: () => { S.dashFilters = {}; S.dashTaskQuery = ''; loadDashboard(true); },
   dashkpi: el => { const status = el.dataset.status || ''; if (status) S.dashFilters.status = status; else delete S.dashFilters.status; delete S.dashFilters.offset; S.dashTab = 'tasks'; loadDashboard(); },
   dashmore: () => { if (!S.dashboard || !S.dashboard.drilldown || !S.dashboard.drilldown.hasMore) return; S.dashFilters.offset = S.dashboard.drilldown.nextOffset; loadDashboard(true); },
+  taskview: el => {
+    if (S.view !== 'mine' && S.view !== 'team') return;
+    const m = el.dataset.m === 'calendar' ? 'calendar' : el.dataset.m === 'board' ? 'board' : 'list';
+    S.taskView[S.view] = m;
+    store.set('tm.v.' + S.view, m);
+    $$('.view-seg button').forEach(b => b.setAttribute('aria-pressed', String(b === el)));
+    renderList(S.view);
+  },
+  calprev: () => {
+    const cur = /^\d{4}-\d{2}$/.test(S.calMonth || '') ? S.calMonth : todayKey().slice(0, 7);
+    const [y, m] = cur.split('-').map(Number);
+    const d = new Date(y, m - 2, 1);
+    S.calMonth = d.getFullYear() + '-' + pad(d.getMonth() + 1);
+    if (S.view === 'dashboard') paintDashboard(); else if (S.view === 'mine' || S.view === 'team') renderList(S.view);
+  },
+  calnext: () => {
+    const cur = /^\d{4}-\d{2}$/.test(S.calMonth || '') ? S.calMonth : todayKey().slice(0, 7);
+    const [y, m] = cur.split('-').map(Number);
+    const d = new Date(y, m, 1);
+    S.calMonth = d.getFullYear() + '-' + pad(d.getMonth() + 1);
+    if (S.view === 'dashboard') paintDashboard(); else if (S.view === 'mine' || S.view === 'team') renderList(S.view);
+  },
+  caltoday: () => {
+    const t = todayKey();
+    S.calMonth = t.slice(0, 7);
+    S.calDay = t;
+    if (S.view === 'dashboard') paintDashboard(); else if (S.view === 'mine' || S.view === 'team') renderList(S.view);
+  },
+  calday: el => {
+    const d = el.dataset.d; if (!d) return;
+    S.calDay = d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) S.calMonth = d.slice(0, 7);
+    if (S.view === 'dashboard') {
+      if (S.dashTab !== 'calendar') {
+        S.dashTab = 'calendar';
+        $$('.nx-tab').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === 'calendar')));
+      }
+      paintDashboard();
+    } else if (S.view === 'mine' || S.view === 'team') {
+      renderList(S.view);
+    }
+    setTimeout(() => { const ag = $('#cal-agenda'); if (ag) ag.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 40);
+  },
+  calunsched: () => {
+    S.calDay = '__UNSCHED__';
+    if (S.view === 'dashboard') paintDashboard(); else if (S.view === 'mine' || S.view === 'team') renderList(S.view);
+  },
+  caladd: el => newTask(el.dataset.d),
+  setprio: el => {
+    if (el.disabled) return;
+    S.draft.priority = el.dataset.p || 'Normal';
+    syncPriorityUi();
+  },
   cancelreopen: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
-  pick: el => { const box = el.closest('.picker'); $('.pin', box).value = el.dataset.n + ' (' + el.dataset.c + ')'; $('.pval', box).value = el.dataset.c; $('.plist', box).hidden = true; },
+  pick: el => {
+    const box = el.closest('.picker');
+    $('.pin', box).value = el.dataset.n + ' (' + el.dataset.c + ')';
+    $('.pval', box).value = el.dataset.c;
+    $('.plist', box).hidden = true;
+    const ep = $('#e-prio');
+    if (ep && box.dataset.picker === 'edit' && S.boot) {
+      const me = S.boot.user, allowHigh = !!(me.isNazim || me.isAdmin) && el.dataset.c !== me.EmpCode;
+      Array.from(ep.options).forEach(o => { if (o.value === 'Urgent' || o.value === 'High') o.disabled = !allowHigh; });
+      if (!allowHigh && (ep.value === 'Urgent' || ep.value === 'High')) ep.value = 'Normal';
+    }
+  },
   showpw: el => { const i = $('#li-pw'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.textContent = show ? 'Hide' : 'Show'; },
   signout: el => signOut(false), signoutall: el => signOut(true, el), restart: () => location.reload(),
   admintab: el => { S.adminTab = el.dataset.t; renderAdmin(); },
@@ -3857,6 +4663,7 @@ const FORMS = {
       if (S.boot && S.boot.user) S.boot.user.vaultUnlocked = true;
       toast('Encryption vault unlocked for this device.');
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
+      if (S.view === 'dashboard') loadDashboard(true);
       if (S.openId) openTask(S.openId);
     } catch (e) { if (!e.auth) toast(e.message, true); }
   }),
@@ -3882,6 +4689,18 @@ document.addEventListener('click', e => {
 document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault(); const fn = FORMS[f.dataset.form]; if (fn) fn(f, e); });
 document.addEventListener('keydown', e => {
   if (isAckLocked()) { if (e.key === 'Escape') e.preventDefault(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    if ($('#cmd-in')) closeCommandPalette(); else openCommandPalette();
+    return;
+  }
+  if ($('#cmd-in')) {
+    if (e.key === 'Escape') { e.preventDefault(); closeCommandPalette(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (CMD_ITEMS.length) { CMD_IDX = (CMD_IDX + 1) % CMD_ITEMS.length; paintCommandList($('#cmd-in').value); } return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (CMD_ITEMS.length) { CMD_IDX = (CMD_IDX - 1 + CMD_ITEMS.length) % CMD_ITEMS.length; paintCommandList($('#cmd-in').value); } return; }
+    if (e.key === 'Enter') { e.preventDefault(); const it = CMD_ITEMS[CMD_IDX]; closeCommandPalette(); if (it && it.run) it.run(); return; }
+    return;
+  }
   const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement && document.activeElement.tagName);
   const isDrawerOpen = $('#drawer') && $('#drawer').classList.contains('open');
 
@@ -3909,13 +4728,14 @@ document.addEventListener('keydown', e => {
     openShortcutsModal();
     return;
   }
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row,.tbl tr.click')) { e.preventDefault(); e.target.click(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.row,.tbl tr.click,.cal-cell')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.id === 'n-taskTitle') { e.preventDefault(); addTaskTitle(); }
 });
 const applyFilter = debounce((scope) => loadList(scope, { silent: true }), 300);
 const applyDraftPreview = debounce(() => paintDraftPreview(), 150);
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.id === 'cmd-in') { CMD_IDX = 0; paintCommandList(el.value); return; }
   if (el.dataset.in === 'filter') { const f = S.filters[S.view], v = el.value.trim(); if (v) f[el.dataset.k] = v; else delete f[el.dataset.k]; applyFilter(S.view); }
   else if (el.dataset.in === 'pick') { const box = el.closest('.picker'); $('.pval', box).value = ''; pickerShow(box); }
   else if (el.dataset.in === 'peopleq') { S.admin.q = el.value; paintPeople(); }
@@ -4028,6 +4848,37 @@ document.addEventListener('change', e => {
   else if (el.dataset.bind) bindChange(el);
 });
 document.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('pin')) pickerShow(e.target.closest('.picker')); });
+let KB_DRAG_ID = '';
+document.addEventListener('dragstart', e => {
+  const card = e.target.closest && e.target.closest('.kb-card[draggable="true"]');
+  if (!card) return;
+  KB_DRAG_ID = card.dataset.id || '';
+  if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', KB_DRAG_ID); }
+});
+document.addEventListener('dragover', e => {
+  const col = e.target.closest && e.target.closest('.kb-col');
+  if (!col || !KB_DRAG_ID) return;
+  e.preventDefault();
+  col.classList.add('is-drop');
+});
+document.addEventListener('dragleave', e => {
+  const col = e.target.closest && e.target.closest('.kb-col');
+  if (col && (!e.relatedTarget || !col.contains(e.relatedTarget))) col.classList.remove('is-drop');
+});
+document.addEventListener('drop', e => {
+  const col = e.target.closest && e.target.closest('.kb-col');
+  $$('.kb-col.is-drop').forEach(x => x.classList.remove('is-drop'));
+  if (!col || !KB_DRAG_ID) return;
+  e.preventDefault();
+  const id = KB_DRAG_ID; KB_DRAG_ID = '';
+  const targetStatus = col.dataset.col;
+  const t = findTask(id);
+  if (!t || !targetStatus || t.Status === targetStatus || !t.CanUpdate) return;
+  if (t.NeedsAck) return confirmAckTasks([t.TaskID]);
+  const lockPending = !t.SelfAssigned && !t.CanManage && !!t.ReceivedAt;
+  if (lockPending && targetStatus === 'Pending') return toast('Confirmed Nazim tasks cannot move back to Pending.', true);
+  setStatus(t, targetStatus);
+});
 function bindChange(el) {
   const kind = el.dataset.bind, i = Number(el.dataset.i), k = el.dataset.k;
   if (kind === 'roles') {
