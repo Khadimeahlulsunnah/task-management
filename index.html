@@ -19,7 +19,19 @@ button,input,select,textarea{font:inherit;color:inherit}
 h1,h2,h3{margin:0;line-height:1.25}h2{font-size:1.15rem}h3{font-size:.95rem}
 p{margin:.4em 0}small,.muted{color:var(--muted)}
 [hidden]{display:none!important}
-:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+:focus:not(:focus-visible){outline:none}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.tick:focus,.tick:focus-visible{outline:none}
+.tick:focus-visible{box-shadow:0 0 0 3px var(--brand-s);border-color:var(--brand)}
+input[type=checkbox]{appearance:none;-webkit-appearance:none;width:18px!important;height:18px!important;flex:none;border:1.8px solid var(--line2);border-radius:6px;background:var(--surface);display:inline-grid;place-items:center;cursor:pointer;vertical-align:middle;margin:0;transition:background-color .15s,border-color .15s,box-shadow .15s}
+input[type=checkbox]:hover:not(:disabled){border-color:var(--brand)}
+input[type=checkbox]:checked{background-color:var(--brand);border-color:var(--brand);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5'/%3E%3C/svg%3E");background-size:13px 13px;background-position:center;background-repeat:no-repeat}
+input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+input[type=checkbox]:focus,input[type=checkbox]:focus-visible{outline:none}
+input[type=checkbox]:focus-visible{box-shadow:0 0 0 3px var(--brand-s);border-color:var(--brand)}
+.sw input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox;width:100%!important;height:100%!important;border:0;background:transparent;box-shadow:none}
+.sw input[type=checkbox]:checked{background:transparent;background-image:none}
+.sw input:focus-visible+span{box-shadow:0 0 0 3px var(--brand-s)}
 .num{font-variant-numeric:tabular-nums}
 
 /* top progress bar: runs while the app waits for the server */
@@ -46,7 +58,7 @@ p{margin:.4em 0}small,.muted{color:var(--muted)}
 .tab:hover{background:#eef2f3;color:var(--ink)}.tab[aria-current=page]{background:var(--brand-s);color:var(--brand-d)}
 .grow{flex:1}
 .avatar{width:36px;height:36px;border-radius:50%;border:0;background:var(--brand);color:#fff;font-weight:700;cursor:pointer}
-.page{max-width:1000px;margin:0 auto;padding:20px}
+.page{width:100%;max-width:none;margin:0 auto;padding:18px 20px}
 
 /* summary chips */
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
@@ -160,7 +172,7 @@ p{margin:.4em 0}small,.muted{color:var(--muted)}
 .scroll-x{overflow-x:auto}
 .sw{position:relative;display:inline-block;width:40px;height:22px}.sw input{opacity:0;width:100%;height:100%;margin:0;position:absolute;cursor:pointer;z-index:1}
 .sw span{position:absolute;inset:0;border-radius:999px;background:#c4cdd4;transition:background-color .18s}.sw span:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .18s}
-.sw input:checked+span{background:var(--brand)}.sw input:checked+span:after{transform:translateX(18px)}.sw input:focus-visible+span{outline:2px solid var(--brand);outline-offset:2px}
+.sw input:checked+span{background:var(--brand)}.sw input:checked+span:after{transform:translateX(18px)}
 .badge{display:inline-block;min-width:48px;text-align:center;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}
 .b-PASS{background:var(--ok-s);color:var(--ok)}.b-WARN{background:var(--warn-s);color:var(--warn)}.b-FAIL{background:var(--bad-s);color:var(--bad)}
 .tests li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef1f3}.tests{list-style:none;margin:0;padding:0}.tests small{display:block}
@@ -233,10 +245,25 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
   .tab[aria-current=page]{background:var(--brand-s);color:var(--brand-d)}
   .rail .profile{display:flex;align-items:center;gap:10px;padding:8px;border:0;border-radius:var(--r);background:none;text-align:left;cursor:pointer}.rail .profile:hover{background:var(--hover)}
   .rail .profile .avatar{display:grid;place-items:center;flex:none}.rail .profile small{display:block;color:var(--muted)}
-  .rail~.page{margin:0 0 0 232px;max-width:none;padding:36px max(32px,calc((100% - 880px)/2)) 48px}
-  .rail~.page.is-full,.rail~.page:has(.nx-shell){padding:22px 28px 44px}
+  .rail~.page{margin:0 0 0 232px;width:calc(100% - 232px);max-width:none;padding:clamp(18px,2.2vw,28px) clamp(18px,2.6vw,36px) 48px}
+  .rail~.page.is-full,.rail~.page:has(.nx-shell){padding:clamp(18px,2vw,24px) clamp(18px,2.4vw,32px) 44px}
   #toasts{bottom:24px}
 }
+@media(min-width:860px) and (max-width:1120px){
+  .rail{width:204px;padding:16px 10px}
+  .rail~.page{margin-left:204px;width:calc(100% - 204px)}
+}
+@media(min-width:1680px){
+  .nx-kpis{gap:16px}
+  .nx-grid-2{gap:18px}
+}
+.mail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:16px;align-items:start}
+.adm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
+.mail-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.mail-stat{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:4px}
+.mail-stat small{font-size:.78rem;color:var(--muted);font-weight:600}
+.mail-stat b{font-size:1.25rem;color:var(--ink)}
+.mail-stat span{font-size:.8rem;color:var(--muted)}
 .tpl-group+.tpl-group{margin-top:10px}.tpl-head{padding:6px 5px 4px;font-size:.84rem}.tpl-head b{font-size:.9rem}
 .assignee-option input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand);flex:none}
 
@@ -647,7 +674,7 @@ const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
+const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -755,7 +782,7 @@ function enter(r) {
   S.data.mine = r.mine; S.data.team = r.team; S.fresh.mine = S.fresh.team = Date.now(); S.filters = { mine: {}, team: {} };
   S.ackTasks = (r.mine && Array.isArray(r.mine.ackTasks)) ? r.mine.ackTasks : [];
   S.selected.mine.clear(); S.selected.team.clear();
-  S.dashboard = null; S.dashFilters = {}; S.mailManagerCodes.clear(); S.mailManagerLoaded = false;
+  S.dashboard = null; S.dashFilters = {}; S.mailData = null; S.mailTab = 'send'; S.mailManagerSearch = ''; S.mailManagerCodes.clear(); S.mailManagerLoaded = false;
   if (S.view === 'team' && !r.user.hasTeam) S.view = 'mine';
   if (S.view === 'dashboard' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   if (S.view === 'mail' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
@@ -782,7 +809,7 @@ function renderAckGate() {
       <div class="ack-list">
         ${hasLocked ? h`<div class="notice warn" style="margin:0">
           <b>🔒 Encrypted Task Details Locked</b><br>
-          <small>Enter your password to view confidential task titles before confirming.</small>
+          <small>Enter your password once on this device to unlock — it will stay unlocked automatically while you remain signed in.</small>
           <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
             <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
             <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
@@ -793,7 +820,7 @@ function renderAckGate() {
             <span class="task-origin">${taskOrigin(t)}</span>
             <span class="due" style="${t.Overdue ? 'color:var(--bad);font-weight:700' : ''}">${t.Overdue ? '🚨 ' : ''}${dueText(t)}</span>
           </div>
-          <div class="ack-card-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+          <div class="ack-card-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
           ${t.Description ? h`<p class="ack-card-desc">${t.Description}</p>` : ''}
           <div class="ack-card-foot">
             <small class="muted">Task ID: ${t.TaskID}</small>
@@ -889,7 +916,7 @@ function showView(v) {
   if (fab) fab.hidden = (v === 'admin' || v === 'dashboard' || v === 'mail');
   $$('.tab').forEach(t => { if (t.dataset.v === v) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); });
   const viewEl = $('#view');
-  if (viewEl) viewEl.classList.toggle('is-full', v === 'dashboard');
+  if (viewEl) viewEl.classList.add('is-full');
   window.scrollTo(0, 0);
   if (v === 'admin') return renderAdmin();
   if (v === 'mail') return renderMail();
@@ -1164,14 +1191,14 @@ function paintDashboardOverview(box, d) {
         </div>
         ${alerts.length ? h`<div class="nx-mini-list">${alerts.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">Assigned to <b>${t.AssignedToName}</b> · Due ${t.Due ? fmtDate(t.Due) : '—'}</div>
           </div>
           <span class="nx-pill rose">${t.DaysLate}d late</span>
         </button>`)}</div>`
         : unconfirmed.length ? h`<div class="nx-mini-list">${unconfirmed.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">Waiting on <b>${t.AssignedToName}</b> to confirm</div>
           </div>
           <span class="nx-pill amber">Waiting confirm</span>
@@ -1303,7 +1330,7 @@ function paintDashboardDeadlines(box, d) {
         <div class="nx-card-head"><div><h3>Late Tasks (Most Urgent)</h3><small>Tasks already past their due date</small></div><button type="button" class="btn sm ghost" data-act="dashkpi" data-status="Overdue">See all ${c.Overdue || 0} →</button></div>
         ${overdueList.length ? h`<div class="nx-mini-list">${overdueList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">${t.AssignedToName} · Due ${t.Due ? fmtDate(t.Due) : '—'} · ${t.Status}</div>
           </div>
           <span class="nx-pill rose">${t.DaysLate}d late</span>
@@ -1314,7 +1341,7 @@ function paintDashboardDeadlines(box, d) {
         <div class="nx-card-head"><div><h3>Due Today</h3><small>Tasks scheduled to finish today</small></div><span class="nx-pill amber">${(d.due && d.due['Due today']) || 0} today</span></div>
         ${todayList.length ? h`<div class="nx-mini-list">${todayList.map(t => h`<button type="button" class="nx-mini-item" data-act="open" data-id="${t.TaskID}">
           <div class="nx-mini-main">
-            <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+            <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
             <div class="nx-mini-sub">${t.AssignedToName} · ${t.NeedsAck ? 'Waiting confirmation' : t.Status}</div>
           </div>
           <span class="nx-pill sky">Due Today</span>
@@ -1384,7 +1411,7 @@ function paintDashboardTasks(box, d) {
 
     ${visibleRows.length ? h`<div style="display:grid;gap:8px">${visibleRows.map(t => h`<button type="button" class="nx-task-row" data-act="open" data-id="${t.TaskID}">
       <div class="nx-mini-main">
-        <div class="nx-mini-title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div>
+        <div class="nx-mini-title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div>
         <div class="nx-mini-sub" style="white-space:normal;display:flex;gap:6px 12px;flex-wrap:wrap;margin-top:4px">
           <span class="task-origin">${taskOrigin(t)}</span>
           <span>👤 ${t.AssignedToName} (${t.AssignedTo})</span>
@@ -1420,14 +1447,203 @@ async function loadDashboard(silent) {
   }
 }
 
+const MAIL_TABS = [
+  { id: 'send', label: 'Send Digests' },
+  { id: 'recurring', label: 'Live Recurring Settings' },
+  { id: 'logs', label: 'Queue & Delivery Logs' }
+];
+const fmtHour12 = h => { const n = Number(h) || 0; return ((n % 12) || 12) + ':00 ' + (n < 12 ? 'AM' : 'PM'); };
+
 function renderMail() {
   const u = S.boot.user, admin = u.isAdmin;
-  mount($('#view'), h`${(u.isNazim || admin) && h`<div class="panel"><h3>Email pending tasks to employees</h3><p class="muted">Send a separate open-task summary to each employee in your reporting tree. Each employee sees only their own tasks. The daily send limit remains in place for Nazim accounts.</p><button class="btn primary" data-act="mailemployees" data-busy="Preparing">Email my employees separately</button><div id="mail-employees-result" style="margin-top:12px"></div></div>`}
-    ${(u.isNazim || admin) && h`<div class="panel"><h3>Send me one team summary</h3><p class="muted">Email one combined employee-by-employee report to your own address. Each row includes employee name, code, email, task, status, and due date.</p><button class="btn" data-act="mailteam" data-busy="Preparing">Email my tasks and team tasks to me</button><div id="mail-team-result" style="margin-top:12px"></div></div>`}
-    ${admin && h`<div class="panel"><h3>Email selected Nazims</h3><p class="muted">Send a private, employee-wise open-task report to each selected Nazim. You can resend to the same Nazim; each send asks for confirmation.</p><div id="mail-manager-picker" class="notice">Loading active Nazims…</div><div class="actions" style="margin-top:10px"><button class="btn" data-act="allmanagers">Select all</button><button class="btn" data-act="clearmanagers">Clear</button><button class="btn primary" data-act="mailmanagers" data-busy="Preparing">Send to selected Nazims</button></div><div id="mail-manager-result" style="margin-top:12px"></div></div>`}
-    <div class="panel"><h3>Delivery</h3><p class="muted">Google's daily mail quota is the only sending limit. Messages blocked by quota stay queued. An administrator can request retry from Admin → Overview; the daily timer sends them when quota becomes available.</p></div>`);
-  if (admin) loadMailManagerOptions();
+  if (!MAIL_TABS.some(t => t.id === S.mailTab)) S.mailTab = 'send';
+  const md = S.mailData, m = md && md.mail;
+  const qCnt = md && md.queueItems ? md.queueItems.length : 0;
+  const schedActive = md && md.schedule ? md.schedule.filter(s => s.Active === 'Y').length : 0;
+
+  mount($('#view'), h`<div class="nx-shell">
+    <header class="nx-topbar">
+      <div class="nx-toprow">
+        <div class="nx-title">
+          <h2>Email &amp; Recurring Reminders</h2>
+          <p>${m ? `${m.sentToday} sent today · ${m.remaining} remaining · ${m.queued} queued` : 'Send open-task digests, inspect live recurring schedules, and track delivery logs.'}</p>
+        </div>
+        <div class="nx-controls">
+          ${m ? h`<span class="nx-pill ${m.remaining > 15 ? 'emerald' : m.remaining > 0 ? 'amber' : 'rose'}">${m.remaining} / 100 left today</span>` : ''}
+          <button type="button" class="btn sm" data-act="refreshmail" data-busy="Refreshing">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="nx-tabs" role="tablist" aria-label="Email sections">
+        ${MAIL_TABS.map(t => h`<button type="button" class="nx-tab" role="tab" data-act="mailtab" data-t="${t.id}" aria-pressed="${S.mailTab === t.id}">
+          <span>${t.label}</span>
+          ${t.id === 'recurring' && md ? h`<span class="nx-tab-cnt">${schedActive}</span>` : ''}
+          ${t.id === 'logs' && qCnt > 0 ? h`<span class="nx-tab-cnt alert">${qCnt}</span>` : ''}
+        </button>`)}
+      </div>
+    </header>
+    <div id="mail-body"></div>
+  </div>`);
+  paintMailTab();
+  if (!S.mailData) loadMailOverview(true);
+  if (admin && !S.mailManagerLoaded) loadMailManagerOptions();
 }
+
+function paintMailTab() {
+  const box = $('#mail-body'); if (!box) return;
+  const u = S.boot.user, admin = u.isAdmin, tab = S.mailTab || 'send';
+  const md = S.mailData;
+
+  if (tab === 'send') {
+    mount(box, h`<div class="mail-grid">
+      <section class="panel" style="margin:0">
+        <h3>Email pending tasks to employees</h3>
+        <p class="muted">Send a separate open-task summary to each employee in your reporting tree. Each employee sees only their own tasks. Daily Nazim limit applies.</p>
+        <button type="button" class="btn primary" data-act="mailemployees" data-busy="Preparing">Email my employees separately</button>
+        <div id="mail-employees-result" style="margin-top:12px"></div>
+      </section>
+      <section class="panel" style="margin:0">
+        <h3>Send me one team summary</h3>
+        <p class="muted">Email one combined employee-by-employee report to your own address (${u.Email || 'no email set'}). Includes name, code, email, task, status, and due date.</p>
+        <button type="button" class="btn" data-act="mailteam" data-busy="Preparing">Email my tasks and team tasks to me</button>
+        <div id="mail-team-result" style="margin-top:12px"></div>
+      </section>
+      ${admin ? h`<section class="panel" style="margin:0;grid-column:1/-1">
+        <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <h3 style="margin:0">Email selected Nazims</h3>
+            <small class="muted">Send a private, employee-wise open-task report to each selected Nazim.</small>
+          </div>
+          <input class="cell-in" style="max-width:260px" data-in="mailmanagerq" type="search" placeholder="Filter Nazims…" value="${S.mailManagerSearch || ''}" aria-label="Filter Nazims">
+        </div>
+        <div id="mail-manager-picker" class="notice">Loading active Nazims…</div>
+        <div class="actions" style="margin-top:12px">
+          <button type="button" class="btn sm" data-act="allmanagers">Select all</button>
+          <button type="button" class="btn sm" data-act="clearmanagers">Clear</button>
+          <button type="button" class="btn primary" data-act="mailmanagers" data-busy="Preparing">Send to selected Nazims</button>
+        </div>
+        <div id="mail-manager-result" style="margin-top:12px"></div>
+      </section>` : ''}
+    </div>`);
+    if (admin) {
+      if (S.mailManagerLoaded) paintMailManagers();
+      else loadMailManagerOptions();
+    }
+    return;
+  }
+
+  if (!md) {
+    mount(box, h`<div class="panel"><div class="sk" style="height:20px;width:40%;margin-bottom:12px"></div><div class="sk" style="height:14px;width:85%;margin-bottom:8px"></div><div class="sk" style="height:14px;width:65%"></div></div>`);
+    return;
+  }
+
+  if (tab === 'recurring') {
+    const cfg = md.config || {}, m = md.mail || {}, sched = md.schedule || [];
+    const activeCount = sched.filter(s => s.Active === 'Y').length;
+    mount(box, h`<div style="display:grid;gap:16px">
+      <div class="mail-stat-grid">
+        <div class="mail-stat">
+          <small>Daily Reminder Hour</small>
+          <b>${fmtHour12(cfg.DAILY_RUN_HOUR)}</b>
+          <span>Configured schedule hour</span>
+        </div>
+        <div class="mail-stat">
+          <small>Overdue Manager Escalation</small>
+          <b style="color:${cfg.ESCALATION_ENABLED === 'Y' ? 'var(--ok)' : 'var(--muted)'}">${cfg.ESCALATION_ENABLED === 'Y' ? 'Enabled' : 'Disabled'}</b>
+          <span>Manager overdue digests</span>
+        </div>
+        <div class="mail-stat">
+          <small>Apps Script Relay</small>
+          <b style="color:${cfg.relayConfigured ? 'var(--ok)' : 'var(--bad)'}">${cfg.relayConfigured ? 'Connected' : 'Not Configured'}</b>
+          <span>Live web app email relay</span>
+        </div>
+        <div class="mail-stat">
+          <small>Active Recurring Rules</small>
+          <b>${activeCount} <small style="font-weight:500">/ ${sched.length}</small></b>
+          <span>${m.scheduledSent || 0} scheduled sent today</span>
+        </div>
+      </div>
+
+      <section class="panel" style="margin:0">
+        <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <h3 style="margin:0">Live Recurring Schedule</h3>
+            <small class="muted">Active recurring digest rules by role and region. Greeting: “${cfg.EMAIL_GREETING || 'Salam,'}” · Sign-off: “${cfg.EMAIL_SIGN_OFF || 'Jazakallahu Khaira!'}”</small>
+          </div>
+          ${admin ? h`<div class="actions">
+            <button type="button" class="btn sm" data-act="gomailadmin" data-t="reminders">Edit Schedule Rules</button>
+            <button type="button" class="btn sm" data-act="gomailadmin" data-t="settings">Edit Timing &amp; Greeting</button>
+          </div>` : ''}
+        </div>
+        ${sched.length ? h`<div class="scroll-x"><table class="tbl">
+          <thead><tr><th>Role</th><th>Region</th><th>Frequency</th><th>Scheduled Day</th><th>Status</th></tr></thead>
+          <tbody>${sched.map(s => {
+            const isWeek = s.DayOfWeek !== '' && s.DayOfWeek != null;
+            const dayTxt = isWeek ? (DAYS[(Number(s.DayOfWeek) || 1) - 1] || 'Day ' + s.DayOfWeek) : ('Day ' + s.DayOfMonth + ' of month');
+            return h`<tr>
+              <td><b>${s.Role}</b></td>
+              <td>${s.Region || 'All regions'}</td>
+              <td>${isWeek ? 'Every week' : 'Every month'}</td>
+              <td>${dayTxt}</td>
+              <td>${s.Active === 'Y' ? h`<span class="st st-Completed">Active</span>` : h`<span class="st st-Pending">Paused</span>`}</td>
+            </tr>`;
+          })}</tbody>
+        </table></div>` : h`<div class="empty"><b>No recurring rules configured</b>${admin ? 'Click “Edit Schedule Rules” above to add weekly or monthly digest schedules.' : 'Ask an administrator to configure recurring digest rules.'}</div>`}
+      </section>
+    </div>`);
+    return;
+  }
+
+  /* logs & queue */
+  const m = md.mail || {}, logs = md.recentLogs || [], q = md.queueItems || [];
+  const total = Math.max(1, (m.sentToday || 0) + (m.remaining || 0));
+  const pS = (m.scheduledSent || 0) * 100 / total, pM = (m.manualSent || 0) * 100 / total;
+  mount(box, h`<div style="display:grid;gap:16px">
+    <section class="panel" style="margin:0">
+      <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 style="margin:0">Daily Mail Quota &amp; Delivery</h3>
+        ${admin ? h`<div class="actions">
+          <button type="button" class="btn sm primary" data-act="runmail" data-busy="Sending">Run queued mail now</button>
+          <button type="button" class="btn sm" data-act="retryquota" data-busy="Requeuing">Retry failed mail</button>
+          <button type="button" class="btn sm" data-act="testmail" data-busy="Sending">Send test mail</button>
+        </div>` : ''}
+      </div>
+      <div class="meter" aria-hidden="true"><i style="width:${pS}%;background:var(--brand)"></i><i style="width:${pM}%;background:#2155a3"></i></div>
+      <p class="num" style="margin:6px 0 0"><b>${m.sentToday || 0}</b> sent today · <b>${m.remaining || 0}</b> left · <b>${m.queued || 0}</b> queued · <b>${m.quotaBlocked || 0}</b> quota-blocked</p>
+    </section>
+
+    <div class="mail-grid">
+      <section class="panel" style="margin:0">
+        <h3>Pending / Failed Queue (${q.length})</h3>
+        ${q.length ? h`<div class="scroll-x"><table class="tbl">
+          <thead><tr><th>Recipient</th><th>Subject</th><th>Status</th><th>Attempts</th></tr></thead>
+          <tbody>${q.map(x => h`<tr><td><b>${x.toEmpCode || '—'}</b><br><small class="muted">${x.toEmail}</small></td><td>${x.subject}${x.error ? h`<br><small style="color:var(--bad)">${x.error}</small>` : ''}</td><td><span class="badge ${x.status === 'QUEUED' ? 'b-WARN' : 'b-FAIL'}">${x.status}</span></td><td class="num">${x.attempts}</td></tr>`)}</tbody>
+        </table></div>` : h`<div class="empty" style="padding:26px 14px"><b>Queue is clear</b>No pending or failed emails waiting in queue.</div>`}
+      </section>
+
+      <section class="panel" style="margin:0">
+        <h3>Recent Delivery Log (${logs.length})</h3>
+        ${logs.length ? h`<div class="scroll-x" style="max-height:420px;overflow-y:auto"><table class="tbl">
+          <thead><tr><th>Time</th><th>Recipient</th><th>Subject</th><th>Result</th></tr></thead>
+          <tbody>${logs.map(x => h`<tr><td><small class="muted">${x.time || '—'}</small></td><td><b>${x.toEmpCode || '—'}</b><br><small class="muted">${x.toEmail}</small></td><td>${x.subject}${x.error ? h`<br><small style="color:var(--bad)">${x.error}</small>` : ''}</td><td><span class="badge ${x.result === 'SENT' ? 'b-PASS' : 'b-FAIL'}">${x.result}</span></td></tr>`)}</tbody>
+        </table></div>` : h`<div class="empty" style="padding:26px 14px"><b>No recent mail logs</b>Emails sent today and recently will appear here.</div>`}
+      </section>
+    </div>
+  </div>`);
+}
+
+async function loadMailOverview(silent) {
+  try {
+    const r = await api('apiMailOverview', S.token);
+    S.mailData = r;
+    if (S.view === 'mail') renderMail();
+  } catch (e) {
+    if (!e.auth && !silent) toast(e.message, true);
+    if (S.view === 'mail' && $('#mail-body') && !S.mailData) {
+      mount($('#mail-body'), h`<div class="empty"><b>Could not load mail details</b>${e.message}<p><button type="button" class="btn sm" data-act="refreshmail">Try again</button></p></div>`);
+    }
+  }
+}
+
 function mailResultText(r) {
   const skipped = r.skipped || {};
   return `${r.prepared} recipient(s) prepared · ${r.sent} sent now · ${r.queued} queued · ${skipped.noTasks || 0} had no open tasks · ${skipped.noEmail || 0} missing a valid email · ${skipped.alreadySent || 0} skipped by the daily Nazim limit.`;
@@ -1443,7 +1659,9 @@ async function loadMailManagerOptions() {
 }
 function paintMailManagers() {
   const box = $('#mail-manager-picker'); if (!box) return;
-  mount(box, S.mailManagers.length ? h`<div class="manager-mail-list">${S.mailManagers.map(m => h`<label class="manager-mail-option"><input type="checkbox" data-act="mailmanager" data-code="${m.code}" ${S.mailManagerCodes.has(m.code) ? 'checked' : ''}><span><b>${m.name}</b> · ${m.code} · ${m.employees} direct report(s)<br><small class="muted">${m.email || 'No email on file'}</small></span></label>`)}</div><small class="hint">${S.mailManagerCodes.size} Nazim(s) selected. Nazims without a valid email or open tasks will be skipped.</small>` : h`<span>No active Nazims with direct reports were found.</span>`);
+  const q = (S.mailManagerSearch || '').trim().toLowerCase();
+  const list = S.mailManagers.filter(m => !q || (m.name + ' ' + m.code + ' ' + (m.email || '')).toLowerCase().includes(q));
+  mount(box, S.mailManagers.length ? h`${list.length ? h`<div class="manager-mail-list">${list.map(m => h`<label class="manager-mail-option"><input type="checkbox" data-act="mailmanager" data-code="${m.code}" ${S.mailManagerCodes.has(m.code) ? 'checked' : ''}><span><b>${m.name}</b> · ${m.code} · ${m.employees} direct report(s)<br><small class="muted">${m.email || 'No email on file'}</small></span></label>`)}</div>` : h`<div class="notice">No Nazims match “${S.mailManagerSearch}”.</div>`}<small class="hint">${S.mailManagerCodes.size} of ${S.mailManagers.length} Nazim(s) selected. Nazims without a valid email or open tasks will be skipped.</small>` : h`<span>No active Nazims with direct reports were found.</span>`);
 }
 /* ================= task lists ================= */
 function renderTasksShell(scope) {
@@ -1473,7 +1691,7 @@ function taskRow(t, scope) {
   return h`<article class="row ${cls}" data-act="open" data-id="${t.TaskID}" tabindex="0" role="button" aria-label="${t.Title}">
     <input class="select-task" type="checkbox" data-act="selecttask" data-id="${t.TaskID}" aria-label="Select ${t.Title}" ${t.CanUpdate ? '' : 'disabled'} ${S.selected[scope].has(t.TaskID) ? 'checked' : ''}>
     <button class="tick" data-act="tick" data-id="${t.TaskID}" ${t.CanUpdate ? '' : 'disabled'} aria-label="${t.Status === 'Completed' ? 'Mark as not done' : 'Mark as done'}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button>
-    <div class="rmain"><div class="title">${t.IsConfidential ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${t.IsConfidential ? h`<span class="task-origin">Encrypted</span>` : ''}${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
+    <div class="rmain"><div class="title">${t.DecryptLocked ? '🔒 ' : ''}${t.Title}</div><div class="meta"><span class="task-origin">${taskOrigin(t)}</span>${who}${t.Reminders ? h`<span>${t.Reminders} reminder${t.Reminders > 1 ? 's' : ''} sent</span>` : ''}</div></div>
     <div class="side"><span class="due">${dueText(t)}</span><span class="st ${stClass(t.Status)}">${t.Status}</span></div></article>`;
 }
 function renderList(scope) {
@@ -1596,7 +1814,7 @@ function pickerShow(box) {
 function openTask(id) {
   const t = findTask(id); if (!t) return;
   S.openId = id; S.openTask = t;
-  openDrawer(dheadH((t.IsConfidential ? '🔒 ' : '') + t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
+  openDrawer(dheadH((t.DecryptLocked ? '🔒 ' : '') + t.Title, t.TaskID), taskBodyH(t), null, () => { S.draftEdit = false; });
   paintStatus(t); loadTaskHistory(id);
 }
 function taskOrigin(t) { return t.SelfAssigned ? 'Self task' : t.GivenByNazim ? 'Given by Nazim ' + t.AssignedByName : 'Given by ' + t.AssignedByName; }
@@ -1642,14 +1860,12 @@ async function reopenTask(form, btn) {
 }
 function taskBodyH(t) {
   return h`<div class="sec" id="d-status"></div>
-    ${t.IsConfidential ? h`<div class="notice ${t.DecryptLocked ? 'warn' : 'ok'}" style="margin-bottom:12px">
-      ${t.DecryptLocked
-        ? h`<b>🔒 Encrypted Task Locked</b><br><small>Enter your password to unlock your decryption key for this session.</small>
-            <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-              <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
-              <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
-            </form>`
-        : h`🔒 <b>Confidential Mode:</b> Title and notes are end-to-end encrypted (AES-256-GCM).`}
+    ${t.IsConfidential && t.DecryptLocked ? h`<div class="notice warn" style="margin-bottom:12px">
+      <b>🔒 Encrypted Task Locked</b><br><small>Enter your password once on this device to unlock — it stays unlocked automatically while you stay signed in.</small>
+      <form data-form="unlockvault" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <input id="uv-pw" type="password" placeholder="Your password" required style="flex:1;min-width:160px;height:34px;padding:4px 10px">
+        <button class="btn sm primary" data-busy="Unlocking">Unlock</button>
+      </form>
     </div>` : ''}
     <div class="sec"><dl class="kv">
       <dt>Assigned to</dt><dd>${t.AssignedToName} <small class="muted">${t.AssignedTo}</small></dd>
@@ -1820,14 +2036,7 @@ function newTask() {
         <textarea id="n-desc" maxlength="2000" rows="2" placeholder="Extra instructions or context…" style="min-height:60px"></textarea>
       </label>
 
-      <!-- NOTIFY & CONFIDENTIALITY -->
-      <div class="field" style="margin:12px 0 0;padding-top:10px;border-top:1px dashed var(--line)">
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:.85rem;font-weight:600">
-          <input id="n-confidential" type="checkbox" style="width:16px;height:16px;accent-color:var(--brand)">
-          <span>🔒 Mark as Confidential (End-to-End Encrypted)</span>
-        </label>
-        <small class="hint">Encrypts title and notes in your browser before saving to Firebase.</small>
-      </div>
+      <!-- NOTIFY -->
       <div id="n-notify-wrap" class="field" hidden style="margin:10px 0 0">
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:.84rem;color:var(--muted)">
           <input id="n-notify" type="checkbox" style="width:16px;height:16px;accent-color:var(--brand)">
@@ -2191,7 +2400,7 @@ async function createTask(form, btn) {
   }
 
   const notify = !!($('#n-notify')?.checked && targets.some(p => p.c !== S.boot.user.EmpCode));
-  const confidential = !!$('#n-confidential')?.checked;
+  const confidential = true;
 
   await busy(btn, async () => {
     try {
@@ -2207,6 +2416,9 @@ async function createTask(form, btn) {
       });
       closeDrawer(true);
       toast(r.mail ? (r.mail.error ? r.count + ' tasks created. Email error: ' + r.mail.error : r.mail.queued ? r.count + ' tasks created. Email queued.' : r.count + ' tasks created and emailed.') : r.count + (r.count === 1 ? ' task created.' : ' tasks created.'));
+      if (r.missingKeyUsers && r.missingKeyUsers.length) {
+        toast('Note: ' + r.missingKeyUsers.join(', ') + ' has not signed in yet to activate an encryption key.', true);
+      }
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
       if (S.view === 'mine' || S.view === 'team') loadList(S.view);
       if (S.view === 'dashboard') { delete S.dashFilters.offset; await loadDashboard(); }
@@ -2291,21 +2503,23 @@ async function adminOverview() {
   const r = await api('apiAdminOverview', S.token); if (!inAdmin('overview')) return;
   S.admin.settings = r.settings;
   const m = r.mail, total = Math.max(1, m.sentToday + m.remaining), pS = m.scheduledSent * 100 / total, pM = m.manualSent * 100 / total;
-  mount($('#adm'), h`<div class="panel"><h3>Mail today</h3>
+  mount($('#adm'), h`<div class="adm-grid">
+    <div class="panel" style="margin:0"><h3>Mail today</h3>
       <div class="meter" aria-hidden="true"><i style="width:${pS}%;background:var(--brand)"></i><i style="width:${pM}%;background:#2155a3"></i></div>
       <p class="num"><b>${m.sentToday}</b> sent · <b>${m.remaining}</b> left today · <b>${m.queued}</b> queued · <b>${m.quotaBlocked || 0}</b> quota-blocked</p>
       <p class="muted">Sending follows the Google account's remaining daily quota. Quota-blocked messages remain queued for the next available run.</p></div>
-    <div class="panel"><h3>At a glance</h3><div class="tiles">
+    <div class="panel" style="margin:0"><h3>At a glance</h3><div class="tiles">
       <div class="tile"><b class="num">${r.stats.employees}</b><span>people</span></div><div class="tile"><b class="num">${r.stats.pending + r.stats.inProgress}</b><span>open tasks</span></div>
       <div class="tile"><b class="num" style="color:var(--bad)">${r.stats.overdue}</b><span>overdue</span></div><div class="tile"><b class="num">${r.stats.completed}</b><span>completed</span></div></div></div>
-    <div class="panel"><h3>Actions</h3><div class="actions">
+    <div class="panel" style="margin:0"><h3>Actions</h3><div class="actions">
       <button class="btn" data-act="runmail" data-busy="Sending">Run queued and reminder mail</button>
       <button class="btn" data-act="retryquota" data-busy="Queuing">Queue quota-blocked mail for tomorrow</button>
       <button class="btn" data-act="testmail" data-busy="Sending">Send a test mail to me</button>
       <button class="btn" data-act="backupnow" data-busy="Backing up">Run backup now</button>
       <button class="btn" data-act="archivenow" data-busy="Archiving">Archive completed tasks</button></div>
       <p class="muted" style="margin-top:10px;font-size:.85rem">Last backup: <b>${r.lastBackup || 'Never'}</b> &nbsp;·&nbsp; Last archived: <b>${r.lastArchive || 'Never'}</b></p></div>
-    <div class="panel"><h3>Firebase &amp; App Links</h3><p style="margin:4px 0"><a href="${r.urls.system}" target="_blank" rel="noopener">Open Firebase Firestore Database</a></p><p style="margin:4px 0"><a href="${r.urls.dashboard}" target="_blank" rel="noopener">Open Firebase Authentication</a></p>${r.urls.app && h`<p style="margin:4px 0" class="muted">App link: ${r.urls.app}</p>`}<p class="muted" style="margin-top:8px">Version ${r.version}</p></div>`);
+    <div class="panel" style="margin:0"><h3>Firebase &amp; App Links</h3><p style="margin:4px 0"><a href="${r.urls.system}" target="_blank" rel="noopener">Open Firebase Firestore Database</a></p><p style="margin:4px 0"><a href="${r.urls.dashboard}" target="_blank" rel="noopener">Open Firebase Authentication</a></p>${r.urls.app && h`<p style="margin:4px 0" class="muted">App link: ${r.urls.app}</p>`}<p class="muted" style="margin-top:8px">Version ${r.version}</p></div>
+  </div>`);
 }
 
 async function adminPeople() {
@@ -2479,6 +2693,59 @@ const ACT = {
   allmanagers: () => { S.mailManagerCodes = new Set(S.mailManagers.map(m => m.code)); paintMailManagers(); },
   clearmanagers: () => { S.mailManagerCodes.clear(); paintMailManagers(); },
   mailmanager: (el, e) => { e.stopPropagation(); if (el.checked) S.mailManagerCodes.add(el.dataset.code); else S.mailManagerCodes.delete(el.dataset.code); paintMailManagers(); },
+  mailtab: el => { S.mailTab = el.dataset.t; renderMail(); },
+  refreshmail: el => busy(el, () => loadMailOverview(false)),
+  gomailadmin: el => { S.adminTab = el.dataset.t || 'reminders'; showView('admin'); },
+  mailemployees: el => busy(el, async () => {
+    try {
+      const r = await api('apiSendTaskDigest', S.token, 'employees');
+      const resBox = $('#mail-employees-result');
+      if (resBox) mount(resBox, h`<div class="notice ok">${mailResultText(r)}</div>`);
+      toast(r.sent + ' employee digest(s) sent.');
+      S.mailData = null;
+    } catch (e) {
+      if (!e.auth) {
+        const resBox = $('#mail-employees-result');
+        if (resBox) mount(resBox, h`<div class="notice bad">${e.message}</div>`);
+        toast(e.message, true);
+      }
+    }
+  }),
+  mailteam: el => busy(el, async () => {
+    try {
+      const r = await api('apiSendTaskDigest', S.token, 'team');
+      const resBox = $('#mail-team-result');
+      if (resBox) mount(resBox, h`<div class="notice ok">${mailResultText(r)}</div>`);
+      toast(r.sent ? 'Team summary emailed to you.' : 'Team summary prepared.');
+      S.mailData = null;
+    } catch (e) {
+      if (!e.auth) {
+        const resBox = $('#mail-team-result');
+        if (resBox) mount(resBox, h`<div class="notice bad">${e.message}</div>`);
+        toast(e.message, true);
+      }
+    }
+  }),
+  mailmanagers: el => {
+    const codes = Array.from(S.mailManagerCodes || []);
+    if (!codes.length) return toast('Select at least one Nazim first.', true);
+    if (!window.confirm(`Send open-task reports to ${codes.length} selected Nazim(s)?`)) return;
+    busy(el, async () => {
+      try {
+        const r = await api('apiSendTaskDigest', S.token, 'managers', codes, true);
+        const resBox = $('#mail-manager-result');
+        if (resBox) mount(resBox, h`<div class="notice ok">${mailResultText(r)}</div>`);
+        toast(r.sent + ' Nazim report(s) sent.');
+        S.mailData = null;
+      } catch (e) {
+        if (!e.auth) {
+          const resBox = $('#mail-manager-result');
+          if (resBox) mount(resBox, h`<div class="notice bad">${e.message}</div>`);
+          toast(e.message, true);
+        }
+      }
+    });
+  },
   selectvisible: el => { const sc = el.dataset.scope, set = S.selected[sc]; ((S.data[sc] && S.data[sc].tasks) || []).forEach(t => { if (t.CanUpdate && set.size < 100) set.add(t.TaskID); }); renderList(sc); },
   clearselection: el => { const sc = el.dataset.scope; S.selected[sc].clear(); renderList(sc); },
   applybulk: (el, e) => { e.stopPropagation(); applyBulkStatus(el.dataset.scope, el); },
@@ -2665,9 +2932,9 @@ const ACT = {
   addsched: () => { S.admin.sched.push({ Role: '', Region: '', DayOfWeek: 1, DayOfMonth: '', Active: 'Y' }); paintSched(); },
   rmsched: el => { S.admin.sched.splice(Number(el.dataset.i), 1); paintSched(); },
   savesched: el => busy(el, async () => { const err = $('#sc-err'); err.hidden = true; try { await api('apiSaveSchedule', S.token, S.admin.sched.map(s => ({ Role: s.Role, Region: s.Region, DayOfWeek: s.DayOfWeek, DayOfMonth: s.DayOfMonth, Active: s.Active === 'Y' }))); toast('Schedule saved.'); } catch (e) { err.textContent = e.message; err.hidden = false; } }),
-  runmail: el => busy(el, async () => { try { const r = await api('apiRunMailNow', S.token); toast(r.sent + ' emails sent, ' + r.newDigests + ' new reminders prepared.'); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  retryquota: el => busy(el, async () => { try { const r = await api('apiRetryQueuedMailTomorrow', S.token); toast(r.message); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
-  testmail: el => busy(el, async () => { try { const r = await api('apiSendTestMail', S.token); toast(r.message); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  runmail: el => busy(el, async () => { try { const r = await api('apiRunMailNow', S.token); toast(r.sent + ' emails sent, ' + r.newDigests + ' new reminders prepared.'); if (S.view === 'mail') await loadMailOverview(false); else adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  retryquota: el => busy(el, async () => { try { const r = await api('apiRetryQueuedMailTomorrow', S.token); toast(r.message); if (S.view === 'mail') await loadMailOverview(false); else adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
+  testmail: el => busy(el, async () => { try { const r = await api('apiSendTestMail', S.token); toast(r.message); if (S.view === 'mail') await loadMailOverview(false); else adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   backupnow: el => busy(el, async () => { try { const r = await api('apiRunBackupNow', S.token); toast('Backup created: ' + (r.name || 'Success')); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   archivenow: el => busy(el, async () => { try { const r = await api('apiArchiveCompletedTasks', S.token); toast(r.message || 'Archival complete'); adminOverview(); } catch (e) { if (!e.auth) toast(e.message, true); } }),
   runtest: el => busy(el, async () => { mount($('#sys-out'), h`<div class="notice">Running checks. Please keep this page open…</div>`); try { paintTests(await api('apiRunSelfTest', S.token, !!el.dataset.full)); } catch (e) { mount($('#sys-out'), h`<div class="notice bad">${e.message}</div>`); } }),
@@ -2691,7 +2958,8 @@ const FORMS = {
   unlockvault: f => busy($('button', f), async () => {
     try {
       await api('apiUnlockVault', S.token, $('#uv-pw').value);
-      toast('Encryption vault unlocked.');
+      if (S.boot && S.boot.user) S.boot.user.vaultUnlocked = true;
+      toast('Encryption vault unlocked for this device.');
       await Promise.all(['mine', 'team'].filter(k => S.data[k]).map(k => loadList(k, { silent: true })));
       if (S.openId) openTask(S.openId);
     } catch (e) { if (!e.auth) toast(e.message, true); }
@@ -2747,6 +3015,7 @@ document.addEventListener('input', e => {
   if (el.dataset.in === 'filter') { const f = S.filters[S.view], v = el.value.trim(); if (v) f[el.dataset.k] = v; else delete f[el.dataset.k]; applyFilter(S.view); }
   else if (el.dataset.in === 'pick') { const box = el.closest('.picker'); $('.pval', box).value = ''; pickerShow(box); }
   else if (el.dataset.in === 'peopleq') { S.admin.q = el.value; paintPeople(); }
+  else if (el.dataset.in === 'mailmanagerq') { S.mailManagerSearch = el.value; paintMailManagers(); }
   else if (el.dataset.in === 'dashsearch') { S.dashSearch = el.value; const b = $('#dashboard-content'); if (b && S.dashboard && S.dashTab === 'team') paintDashboardTeam(b, S.dashboard); }
   else if (el.dataset.in === 'dashtasksearch') { S.dashTaskQuery = el.value; const b = $('#dashboard-content'); if (b && S.dashboard && S.dashTab === 'tasks') paintDashboardTasks(b, S.dashboard); }
   else if (el.id === 'n-people-search') paintAssignees();
