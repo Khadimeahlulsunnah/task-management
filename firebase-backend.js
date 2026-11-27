@@ -24,11 +24,17 @@
     MAX_LOGIN_ATTEMPTS: 5,
     LOCKOUT_MINUTES: 15,
     ARCHIVE_AFTER_DAYS: 60,
+    MAX_URGENT_TASKS: 3,
+    MAX_HIGH_TASKS: 5,
+    MAX_NORMAL_TASKS: 25,
+    MAX_LOW_TASKS: 20,
     EMAIL_GREETING: 'Salam,',
     EMAIL_SIGN_OFF: 'Jazakallahu Khaira!'
   };
 
   const TM_STATUSES = ['Pending', 'In Progress', 'Completed'];
+  const TM_PRIORITIES = ['Urgent', 'High', 'Normal', 'Low'];
+  const TM_PRIORITY_RANK = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
   const TM_APP_ROLES = ['User', 'Division Admin', 'State Admin', 'Region Admin'];
   const TM_INDIA_STATES = [
     'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
@@ -48,13 +54,55 @@
   let authReadyPromise = null;
 
   let _MEMO = {};
+  let _TASK_CACHE = {};
+  const TASK_CACHE_TTL_MS = 5 * 60 * 1000;
   const _CREATE_DEDUP = {};
 
   function memoGet(key, fn) {
     if (!Object.prototype.hasOwnProperty.call(_MEMO, key)) _MEMO[key] = fn();
     return _MEMO[key];
   }
-  function memoClear() { _MEMO = {}; }
+  function clearTaskCache_() { _TASK_CACHE = {}; }
+  function memoClear() { _MEMO = {}; clearTaskCache_(); }
+
+  function upsertTaskInCache_(rawTask) {
+    if (!rawTask) return;
+    const id = String(rawTask.TaskID || rawTask.id || '');
+    if (!id) return;
+    const normalized = Object.assign({ id }, rawTask, { TaskID: id });
+    Object.keys(_TASK_CACHE).forEach(key => {
+      const entry = _TASK_CACHE[key];
+      if (!entry || !Array.isArray(entry.tasks)) return;
+      const idx = entry.tasks.findIndex(x => String(x.TaskID || x.id) === id);
+      if (entry.scope === 'mine') {
+        const isMine = String(normalized.AssignedTo || '') === entry.code;
+        if (idx >= 0) {
+          if (isMine) entry.tasks[idx] = normalized;
+          else entry.tasks.splice(idx, 1);
+        } else if (isMine) {
+          entry.tasks.unshift(normalized);
+        }
+      } else if (entry.scope === 'team') {
+        const visible = entry.access ? tmCanSee_(entry.access, normalized) : true;
+        if (idx >= 0) {
+          if (visible) entry.tasks[idx] = normalized;
+          else entry.tasks.splice(idx, 1);
+        } else if (visible) {
+          entry.tasks.unshift(normalized);
+        }
+      }
+    });
+  }
+
+  function removeTaskFromCache_(taskId) {
+    const id = String(taskId || '');
+    if (!id) return;
+    Object.keys(_TASK_CACHE).forEach(key => {
+      const entry = _TASK_CACHE[key];
+      if (!entry || !Array.isArray(entry.tasks)) return;
+      entry.tasks = entry.tasks.filter(x => String(x.TaskID || x.id) !== id);
+    });
+  }
 
   // ================= Firebase Initialization =================
   function initFirebase() {
@@ -173,7 +221,91 @@
   function tmSortKey_(t) {
     const done = t.Status === 'Completed' ? '1' : '0';
     const due = t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '9999-99-99';
-    return done + due;
+    const pr = String(TM_PRIORITY_RANK[tmNormPriority_(t.Priority)] ?? 2);
+    return done + due + pr;
+  }
+
+  function tmNormPriority_(val) {
+    const raw = String(val || '').trim();
+    const hit = TM_PRIORITIES.find(x => x.toLowerCase() === raw.toLowerCase());
+    return hit || 'Normal';
+  }
+
+  function tmPriorityLimits_(cfg) {
+    const c = cfg || {};
+    const pos = (v, def) => { const n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : def; };
+    const opt = (v, def) => (v === 0 || v === '0') ? 0 : pos(v, def);
+    return {
+      Urgent: pos(c.MAX_URGENT_TASKS, TM_DEFAULTS.MAX_URGENT_TASKS),
+      High: pos(c.MAX_HIGH_TASKS, TM_DEFAULTS.MAX_HIGH_TASKS),
+      Normal: opt(c.MAX_NORMAL_TASKS, TM_DEFAULTS.MAX_NORMAL_TASKS),
+      Low: opt(c.MAX_LOW_TASKS, TM_DEFAULTS.MAX_LOW_TASKS)
+    };
+  }
+
+  async function tmValidatePriorityRules_(user, access, hier, cfg, targetsAddingMap, priority, excludeTaskId) {
+    const p = tmNormPriority_(priority);
+    const targetCodes = Object.keys(targetsAddingMap || {});
+    if (!targetCodes.length) return p;
+
+    if (p === 'Urgent' || p === 'High') {
+      for (const target of targetCodes) {
+        if (String(target) === String(user.EmpCode)) {
+          throw new Error('Urgent and High priority tasks cannot be set on self-assigned tasks. Choose Normal or Low.');
+        }
+        if (!(access.admin || access.sub.has(String(target)))) {
+          throw new Error('Only a Nazim or Administrator can assign Urgent or High priority tasks to employees.');
+        }
+      }
+    }
+
+    const limits = tmPriorityLimits_(cfg);
+    const cap = limits[p];
+    if (cap > 0) {
+      const teamCache = _TASK_CACHE[access.code + ':team'];
+      const mineCache = _TASK_CACHE[access.code + ':mine'];
+      for (const target of targetCodes) {
+        const adding = Number(targetsAddingMap[target]) || 0;
+        if (!adding) continue;
+        let tasksForTarget = null;
+        if (teamCache && (Date.now() - teamCache.ts) < TASK_CACHE_TTL_MS) {
+          tasksForTarget = teamCache.tasks.filter(t => String(t.AssignedTo) === String(target));
+        } else if (String(target) === String(access.code) && mineCache && (Date.now() - mineCache.ts) < TASK_CACHE_TTL_MS) {
+          tasksForTarget = mineCache.tasks;
+        } else {
+          const snap = await db.collection('tasks').where('AssignedTo', '==', String(target)).get();
+          tasksForTarget = [];
+          snap.forEach(d => tasksForTarget.push(Object.assign({ id: d.id }, d.data())));
+        }
+        const openOfPriority = tasksForTarget.filter(t =>
+          String(t.TaskID || t.id) !== String(excludeTaskId || '') &&
+          String(t.Status || 'Pending') !== 'Completed' &&
+          tmNormPriority_(t.Priority) === p
+        ).length;
+        if (openOfPriority + adding > cap) {
+          const emp = hier.byCode[String(target)] || {};
+          const who = emp.EmpName ? `${emp.EmpName} (${target})` : target;
+          throw new Error(`${who} has reached the active ${p} priority limit (${openOfPriority}/${cap} open). Complete existing ${p} tasks or choose a lower priority.`);
+        }
+      }
+    }
+    return p;
+  }
+
+  async function tmRewrapTaskKeys_(task, newAssigneeCode, assignedByCode, actorEmpCode, hier) {
+    if (!task || !task.IsConfidential) return null;
+    if (!window.CryptoVault || !window.CryptoVault.isUnlocked(actorEmpCode)) {
+      throw new Error('Unlock your encryption vault before reassigning a confidential task.');
+    }
+    const dek = await window.CryptoVault.unwrapDekFromEnvelopes(task.KeyEnvelopes, actorEmpCode);
+    if (!dek) throw new Error('Missing encryption key for confidential task ' + (task.TaskID || '') + '.');
+    const allowedCodes = await getAllowedKeyCodes_(newAssigneeCode, assignedByCode, hier);
+    const jwks = await fetchPublicKeys_(allowedCodes);
+    if (!jwks[actorEmpCode] && window.CryptoVault.getPublicJwk && window.CryptoVault.getPublicJwk()) {
+      jwks[actorEmpCode] = window.CryptoVault.getPublicJwk();
+    }
+    const keyEnvelopes = await window.CryptoVault.wrapDekForRecipients(dek, jwks);
+    return { AllowedCodes: allowedCodes, KeyEnvelopes: keyEnvelopes };
   }
 
   function authEmailFor_(empCode, email) {
@@ -770,6 +902,7 @@
       State: String(t.State || assignedTo.State || ''),
       Division: String(t.Division || ''),
       Due: t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '',
+      Priority: tmNormPriority_(t.Priority),
       Status: status,
       Overdue: over,
       Created: tmStamp_(t.CreatedAt),
@@ -777,6 +910,7 @@
       ReceivedAt: receivedAt,
       NeedsAck: needsAck,
       Completed: tmStamp_(t.CompletedAt),
+      ReopenCount: Number(t.ReopenCount) || 0,
       Reminders: Number(t.ReminderCount) || 0,
       LastReminder: tmStamp_(t.LastReminderAt),
       CanUpdate: tmCanUpdate_(a, t),
@@ -788,9 +922,17 @@
   }
 
   // ================= Task Fetching Helper =================
-  async function tmFetchVisibleTasks_(access, scope) {
+  async function tmGetVisibleTasks_(access, scope, opt) {
+    const sc = scope === 'team' ? 'team' : 'mine';
+    const key = access.code + ':' + sc;
+    const force = !!(opt && opt.forceRefresh);
+    const cached = _TASK_CACHE[key];
+    if (!force && cached && (Date.now() - cached.ts) < TASK_CACHE_TTL_MS) {
+      return { tasks: cached.tasks, fromCache: true, fetchedAt: cached.fetchedAt };
+    }
+
     const taskMap = {};
-    if (scope === 'mine') {
+    if (sc === 'mine') {
       const snap = await db.collection('tasks').where('AssignedTo', '==', access.code).get();
       snap.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); });
     } else if (access.admin || access.headOffice) {
@@ -812,7 +954,28 @@
       const snaps = await Promise.all(queries);
       snaps.forEach(s => s.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); }));
     }
-    return Object.values(taskMap);
+
+    const tasks = Object.values(taskMap);
+    const nowMs = Date.now();
+    const fetchedAt = new Date(nowMs);
+    _TASK_CACHE[key] = { ts: nowMs, fetchedAt, tasks, scope: sc, code: access.code, access };
+    // Team fetch already includes tasks assigned to the caller, so prime 'mine' cache at 0 extra reads.
+    if (sc === 'team') {
+      _TASK_CACHE[access.code + ':mine'] = {
+        ts: nowMs,
+        fetchedAt,
+        tasks: tasks.filter(t => String(t.AssignedTo) === access.code),
+        scope: 'mine',
+        code: access.code,
+        access
+      };
+    }
+    return { tasks, fromCache: false, fetchedAt };
+  }
+
+  async function tmFetchVisibleTasks_(access, scope, opt) {
+    const res = await tmGetVisibleTasks_(access, scope, opt);
+    return res.tasks;
   }
 
   // ================= Secure Email & Digest Engine =================
@@ -1239,7 +1402,7 @@
 
       const out = {
         today: tmDayKey_(new Date()),
-        app: { name: cfg.APP_NAME || 'Task Management', version: TM_VERSION, sessionDays: Number(cfg.SESSION_DAYS) || 30 },
+        app: { name: cfg.APP_NAME || 'Task Management', version: TM_VERSION, sessionDays: Number(cfg.SESSION_DAYS) || 30, priorityLimits: tmPriorityLimits_(cfg) },
         user: {
           EmpCode: me.EmpCode,
           EmpName: me.EmpName,
@@ -1291,10 +1454,11 @@
         divisions: mergedDivNames,
         roles: roles.filter(x => x.Active).map(x => x.Role),
         appRoles: TM_APP_ROLES,
-        statuses: TM_STATUSES
+        statuses: TM_STATUSES,
+        priorities: TM_PRIORITIES
       };
 
-      out.mine = await Backend.apiListTasks(token, { scope: 'mine' });
+      out.mine = await Backend.apiListTasks(token, { scope: 'mine', forceRefresh: true });
       out.team = null;
       return out;
     },
@@ -1322,7 +1486,7 @@
         throw new Error('Team task access is limited to Nazim and Area Admin users.');
       }
 
-      const allTasks = await tmFetchVisibleTasks_(access, scope);
+      const allTasks = await tmFetchVisibleTasks_(access, scope, { forceRefresh: !!filters.forceRefresh });
       const today = tmDayKey_(new Date());
       const search = String(filters.search || '').trim().toLowerCase();
       const emp = String(filters.employee || '').trim().toLowerCase();
@@ -1344,10 +1508,11 @@
         const due = t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '';
         if (filters.dueFrom && (!due || due < filters.dueFrom)) return;
         if (filters.dueTo && (!due || due > filters.dueTo)) return;
+        if (filters.priority && tmNormPriority_(t.Priority) !== tmNormPriority_(filters.priority)) return;
         preMatched.push(t);
       });
 
-      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, All: 0 };
+      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, All: 0, priority: { Urgent: 0, High: 0, Normal: 0, Low: 0 } };
       const offset = Math.max(0, Number(filters.offset) || 0);
       let total = 0;
       let shaped = [];
@@ -1363,6 +1528,10 @@
         searched.forEach(t => {
           counts.All++;
           counts[t.Status] = (counts[t.Status] || 0) + 1;
+          if (t.Status !== 'Completed') {
+            const tp = tmNormPriority_(t.Priority);
+            counts.priority[tp] = (counts.priority[tp] || 0) + 1;
+          }
           if (t.Overdue) counts.Overdue++;
           if (filters.status && String(t.Status) !== filters.status) return;
           if (filters.overdue === true || filters.overdue === 'true') { if (!t.Overdue) return; }
@@ -1380,6 +1549,10 @@
           const over = t.Status !== 'Completed' && due && due < today;
           counts.All++;
           counts[t.Status] = (counts[t.Status] || 0) + 1;
+          if (t.Status !== 'Completed') {
+            const tp = tmNormPriority_(t.Priority);
+            counts.priority[tp] = (counts.priority[tp] || 0) + 1;
+          }
           if (over) counts.Overdue++;
           if (filters.status && String(t.Status) !== filters.status) return;
           if (filters.overdue === true || filters.overdue === 'true') { if (!over) return; }
@@ -1519,6 +1692,11 @@
       if (specs.length > 200) throw new Error('A single save can create at most 200 tasks.');
 
       const creatorAccess = await tmAccess_(user);
+      const cfg = await tmConfig_();
+      const targetAddingMap = {};
+      specs.forEach(sp => { targetAddingMap[sp.target] = (targetAddingMap[sp.target] || 0) + 1; });
+      const taskPriority = await tmValidatePriorityRules_(user, creatorAccess, hier, cfg, targetAddingMap, data.priority || 'Normal');
+
       const targetKeyCache = {};
       const missingKeyTargets = new Set();
       const taskRowsForMail = {};
@@ -1567,11 +1745,13 @@
             State: emp.State || '',
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
+            Priority: taskPriority,
             Status: 'Pending',
             ReceivedAt: receivedAt,
             CreatedAt: now,
             UpdatedAt: now,
             CompletedAt: null,
+            ReopenCount: 0,
             LastReminderAt: null,
             ReminderCount: 0
           };
@@ -1588,11 +1768,13 @@
             State: emp.State || '',
             Division: emp.Division || '',
             DueDate: sp.due || defaultDue,
+            Priority: taskPriority,
             Status: 'Pending',
             ReceivedAt: receivedAt,
             CreatedAt: now,
             UpdatedAt: now,
             CompletedAt: null,
+            ReopenCount: 0,
             LastReminderAt: null,
             ReminderCount: 0
           };
@@ -1617,6 +1799,7 @@
           State: String(emp.State || ''),
           Division: String(emp.Division || ''),
           Due: tmDayKey_(sp.due || defaultDue),
+          Priority: taskPriority,
           Status: 'Pending',
           Overdue: tmOverdue_(sp.due || defaultDue, 'Pending'),
           Created: tmStamp_(now),
@@ -1658,6 +1841,7 @@
         subWrites.slice(i, i + 450).forEach(w => b.set(w.ref, w.data));
         await b.commit();
       }
+      taskWrites.forEach(w => upsertTaskInCache_(Object.assign({ id: w.data.TaskID }, w.data)));
 
       const recipients = Object.keys(taskRowsForMail);
       let mail = null;
@@ -1714,8 +1898,9 @@
       const nextDesc = changes.description !== undefined ? changes.description : changes.Description;
       const nextDue = changes.dueDate !== undefined ? changes.dueDate : changes.DueDate;
       const nextAssigned = changes.assignedTo !== undefined ? changes.assignedTo : changes.AssignedTo;
+      const nextPriorityRaw = changes.priority !== undefined ? changes.priority : changes.Priority;
 
-      if (nextTitle !== undefined || nextDesc !== undefined || nextDue !== undefined || nextAssigned !== undefined) {
+      if (nextTitle !== undefined || nextDesc !== undefined || nextDue !== undefined || nextAssigned !== undefined || nextPriorityRaw !== undefined) {
         if (!tmCanManage_(access, task)) {
           throw new Error('Only a Nazim (for team tasks) or an administrator can edit task details.');
         }
@@ -1761,7 +1946,23 @@
           updates.State = e.State || '';
           updates.Division = e.Division || '';
           updates.WatcherCodes = getWatcherCodes_(e.EmpCode, task.AssignedBy, hier);
+          const rewrapped = await tmRewrapTaskKeys_(task, e.EmpCode, task.AssignedBy, user.EmpCode, hier);
+          if (rewrapped) Object.assign(updates, rewrapped);
           changedFields.push('assignee');
+        }
+        const effectiveTarget = String(updates.AssignedTo || task.AssignedTo);
+        const curPrio = tmNormPriority_(task.Priority);
+        const wantedPrio = nextPriorityRaw !== undefined ? tmNormPriority_(nextPriorityRaw) : curPrio;
+        if (wantedPrio !== curPrio || (updates.AssignedTo && String(task.Status || 'Pending') !== 'Completed')) {
+          if ((wantedPrio === 'Urgent' || wantedPrio === 'High') && String(effectiveTarget) === String(task.AssignedBy)) {
+            throw new Error('Urgent and High priority tasks cannot be set on self-assigned tasks.');
+          }
+          const cfg = await tmConfig_();
+          await tmValidatePriorityRules_(user, access, hier, cfg, { [effectiveTarget]: 1 }, wantedPrio, id);
+          if (wantedPrio !== curPrio) {
+            updates.Priority = wantedPrio;
+            changedFields.push('priority');
+          }
         }
       }
 
@@ -1785,6 +1986,7 @@
         }
         updates.Status = nextStatus;
         updates.CompletedAt = nextStatus === 'Completed' ? now : null;
+        if (reopening) updates.ReopenCount = (Number(task.ReopenCount) || 0) + 1;
         if (nextStatus === 'In Progress' && !task.ReceivedAt) {
           updates.ReceivedAt = now;
         }
@@ -1816,6 +2018,7 @@
 
       let mail = null;
       const freshTask = Object.assign({}, task, updates);
+      upsertTaskInCache_(Object.assign({ id }, freshTask));
       if (reopening && reopenRecipient) {
         try {
           mail = await tmMailReopen_(freshTask, reopenRecipient, user, reopenRemark, hier.byCode);
@@ -1840,6 +2043,7 @@
       const batch = db.batch();
       let updated = 0;
       const updatedIds = [];
+      const updatedRaw = [];
       const failed = [];
       const reopenMails = [];
 
@@ -1864,6 +2068,7 @@
         }
 
         const updates = { Status: status, UpdatedAt: now, CompletedAt: status === 'Completed' ? now : null };
+        if (reopening) updates.ReopenCount = (Number(t.ReopenCount) || 0) + 1;
         if (status === 'In Progress' && !t.ReceivedAt) updates.ReceivedAt = now;
         batch.update(docRef, updates);
         batch.set(db.collection('taskHistory').doc(), {
@@ -1877,10 +2082,15 @@
         });
         updated++;
         updatedIds.push(id);
-        if (reopening && emp) reopenMails.push({ task: Object.assign({}, t, updates), emp });
+        const merged = Object.assign({}, t, updates);
+        updatedRaw.push(Object.assign({ id }, merged));
+        if (reopening && emp) reopenMails.push({ task: merged, emp });
       }
 
-      if (updated) await batch.commit();
+      if (updated) {
+        await batch.commit();
+        updatedRaw.forEach(x => upsertTaskInCache_(x));
+      }
       for (const rm of reopenMails) {
         const mr = await tmMailReopen_(rm.task, rm.emp, user, comment, hier.byCode);
         if (mr && mr.error) failed.push({ id: rm.task.TaskID, reason: mr.error });
@@ -1892,6 +2102,97 @@
         updatedIds,
         failed,
         message: `${updated} task(s) updated; ${failed.length} item(s) could not be applied.`
+      };
+    },
+
+    // 6b. Bulk Reassign Tasks (Enforces permissions, priority limits & E2E key re-wrapping)
+    apiBulkReassignTasks: async function (token, ids, targetEmpCode) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      const hier = await tmHierarchy_();
+      const cfg = await tmConfig_();
+      const target = String(targetEmpCode || '').trim();
+      const wanted = Array.isArray(ids) ? Array.from(new Set(ids.map(String).filter(Boolean))) : [];
+      if (!wanted.length || wanted.length > 100) throw new Error('Select between 1 and 100 tasks.');
+      if (!target || !(await tmCanAssign_(user, target))) throw new Error('You cannot reassign tasks to that employee.');
+      const targetEmp = hier.byCode[target];
+      if (!targetEmp || targetEmp.Active !== 'Y') throw new Error('Target employee is not active.');
+
+      const candidates = [];
+      const failed = [];
+      for (const id of wanted) {
+        const docRef = db.collection('tasks').doc(id);
+        const snap = await docRef.get();
+        if (!snap.exists) { failed.push({ id, reason: 'Task no longer exists.' }); continue; }
+        const t = snap.data();
+        if (!tmCanSee_(access, t) || !tmCanManage_(access, t)) { failed.push({ id, reason: 'Only a Nazim or Administrator can reassign this task.' }); continue; }
+        if (String(t.AssignedTo) === target) { failed.push({ id, reason: 'Already assigned to ' + targetEmp.EmpName + '.' }); continue; }
+        candidates.push({ id, docRef, t });
+      }
+      if (!candidates.length) {
+        throw new Error(failed[0] ? failed[0].reason : 'No eligible tasks to reassign.');
+      }
+
+      // Enforce priority governance & active priority limits for open tasks moved to target
+      const addingByPrio = {};
+      candidates.forEach(({ t }) => {
+        if (String(t.Status || 'Pending') !== 'Completed') {
+          const p = tmNormPriority_(t.Priority);
+          if ((p === 'Urgent' || p === 'High') && (target === String(user.EmpCode) || target === String(t.AssignedBy))) {
+            throw new Error(`Cannot reassign ${p} task "${t.TaskID}" as a self-task.`);
+          }
+          addingByPrio[p] = (addingByPrio[p] || 0) + 1;
+        }
+      });
+      for (const p of Object.keys(addingByPrio)) {
+        await tmValidatePriorityRules_(user, access, hier, cfg, { [target]: addingByPrio[p] }, p);
+      }
+
+      const now = new Date();
+      const batch = db.batch();
+      const updatedRaw = [];
+      const updatedTasks = [];
+
+      for (const item of candidates) {
+        const { id, docRef, t } = item;
+        const watcherCodes = getWatcherCodes_(targetEmp.EmpCode, t.AssignedBy, hier);
+        const updates = {
+          AssignedTo: targetEmp.EmpCode,
+          Region: targetEmp.Region || '',
+          State: targetEmp.State || '',
+          Division: targetEmp.Division || '',
+          WatcherCodes: watcherCodes,
+          UpdatedAt: now,
+          ReceivedAt: targetEmp.EmpCode === String(user.EmpCode) ? (t.ReceivedAt || now) : null
+        };
+        const rewrapped = await tmRewrapTaskKeys_(t, targetEmp.EmpCode, t.AssignedBy, user.EmpCode, hier);
+        if (rewrapped) Object.assign(updates, rewrapped);
+
+        batch.update(docRef, updates);
+        batch.set(db.collection('taskHistory').doc(), {
+          Timestamp: now,
+          TaskID: id,
+          ActorEmpCode: user.EmpCode,
+          ActorName: user.EmpName,
+          Action: 'TASK_UPDATED',
+          Details: JSON.stringify({ fields: ['assignee'], reassignedTo: targetEmp.EmpCode }),
+          WatcherCodes: watcherCodes
+        });
+        const merged = Object.assign({}, t, updates);
+        updatedRaw.push(Object.assign({ id }, merged));
+        updatedTasks.push(await tmShapeTask_(merged, access, hier.byCode));
+      }
+
+      await batch.commit();
+      updatedRaw.forEach(x => upsertTaskInCache_(x));
+
+      return {
+        ok: true,
+        count: updatedTasks.length,
+        updated: updatedTasks.length,
+        updatedTasks,
+        failed,
+        message: `${updatedTasks.length} task(s) reassigned to ${targetEmp.EmpName}.`
       };
     },
 
@@ -1919,6 +2220,7 @@
       });
 
       await batch.commit();
+      removeTaskFromCache_(id);
       return { ok: true, taskId: id };
     },
 
@@ -1932,6 +2234,7 @@
       const now = new Date();
       const batch = db.batch();
       let confirmed = 0;
+      const ackedRaw = [];
 
       for (const id of wanted) {
         const docRef = db.collection('tasks').doc(id);
@@ -1954,11 +2257,15 @@
             Details: JSON.stringify({ from: prevStatus, to: updates.Status || prevStatus }),
             WatcherCodes: t.WatcherCodes || getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier)
           });
+          ackedRaw.push(Object.assign({ id }, t, updates));
           confirmed++;
         }
       }
 
-      if (confirmed > 0) await batch.commit();
+      if (confirmed > 0) {
+        await batch.commit();
+        ackedRaw.forEach(x => upsertTaskInCache_(x));
+      }
       return { ok: true, count: confirmed };
     },
 
@@ -2003,8 +2310,10 @@
       if (statusFilter && TM_STATUSES.indexOf(statusFilter) < 0 && statusFilter !== 'Overdue') {
         throw new Error('Invalid dashboard status filter.');
       }
+      const priorityFilter = f.priority ? tmNormPriority_(f.priority) : '';
 
-      const rawTasks = await tmFetchVisibleTasks_(access, 'team');
+      const taskRes = await tmGetVisibleTasks_(access, 'team', { forceRefresh: !!f.forceRefresh });
+      const rawTasks = taskRes.tasks;
       const visible = rawTasks.filter(t => tmCanSee_(access, t)).map(t => {
         const e = hier.byCode[String(t.AssignedTo)] || {};
         return { task: t, employee: e, due: tmAsDate_(t.DueDate), overdue: tmOverdue_(t.DueDate, t.Status) };
@@ -2092,11 +2401,13 @@
         if (canFilterAll && f.region && String(e.Region || x.task.Region || '') !== String(f.region)) return false;
         if (canAreaFilter && f.role && String(e.Role || '') !== String(f.role)) return false;
         if (f.employee && String(x.task.AssignedTo) !== String(f.employee)) return false;
+        if (priorityFilter && tmNormPriority_(x.task.Priority) !== priorityFilter) return false;
         if (canFilterAll && nazimScope && !nazimScope[String(x.task.AssignedTo)]) return false;
         return true;
       });
 
       const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, AwaitingConfirm: 0, Total: selected.length };
+      const byPriority = { Urgent: 0, High: 0, Normal: 0, Low: 0 };
       const byRegion = {}, byState = {}, byLocation = {}, byRole = {}, byEmployee = {}, byNazim = {};
       const byDue = { 'Due today': 0, 'Due within 7 days': 0, 'Due later': 0, 'No due date': 0 };
       const byCreated = {}, byCompleted = {};
@@ -2104,7 +2415,37 @@
       const todayMs = new Date(todayKey + 'T00:00:00').getTime();
 
       let completedOnTime = 0, completedLate = 0, selfTasks = 0, managerTasks = 0;
+      let ackHoursSum = 0, ackCount = 0, unconfirmed24h = 0, unconfirmed48h = 0;
+      let cycleDaysSum = 0, cycleCount = 0, leadDaysSum = 0, leadCount = 0;
+      let reopenedCount = 0, totalReopens = 0, staleNoDue = 0;
+      const ageBuckets = { d0_3: 0, d4_7: 0, d8_14: 0, d15_plus: 0 };
+      const nowMs = Date.now();
       const overdueItems = [], dueTodayItems = [], awaitingItems = [];
+      const calendarDays = {};
+      const calCandidates = [];
+      const upcomingLoad = [];
+      const upcomingByDate = {};
+      const calWeekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const calMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      for (let dOff = 0; dOff < 14; dOff++) {
+        const dd = new Date(todayMs + dOff * 86400000);
+        const dk = tmDayKey_(dd);
+        const rec = {
+          date: dk,
+          dayNum: dd.getDate(),
+          monthShort: calMonths[dd.getMonth()],
+          weekday: calWeekdays[dd.getDay()],
+          isToday: dOff === 0,
+          isWeekend: dd.getDay() === 0 || dd.getDay() === 6,
+          total: 0,
+          open: 0,
+          pending: 0,
+          inProgress: 0,
+          completed: 0
+        };
+        upcomingLoad.push(rec);
+        upcomingByDate[dk] = rec;
+      }
 
       // 6 rolling 7-day activity buckets (5 weeks ago .. This Week)
       const weekly = [];
@@ -2140,17 +2481,72 @@
 
         const isSelf = String(t.AssignedBy) === String(t.AssignedTo);
         if (isSelf) selfTasks++; else managerTasks++;
+        if (t.Status !== 'Completed') {
+          const tp = tmNormPriority_(t.Priority);
+          byPriority[tp] = (byPriority[tp] || 0) + 1;
+        }
+        const createdDt = tmAsDate_(t.CreatedAt);
+        const receivedDt = tmAsDate_(t.ReceivedAt);
+        const completedDt = tmAsDate_(t.CompletedAt);
+        const reopens = Number(t.ReopenCount) || 0;
+        if (reopens > 0) { reopenedCount++; totalReopens += reopens; }
+
+        if (!isSelf && createdDt && receivedDt && receivedDt.getTime() >= createdDt.getTime()) {
+          ackHoursSum += (receivedDt.getTime() - createdDt.getTime()) / 3600000;
+          ackCount++;
+        }
         if (!isSelf && String(t.Status || 'Pending') === 'Pending' && !t.ReceivedAt) {
           counts.AwaitingConfirm++;
           awaitingItems.push(x);
+          if (createdDt) {
+            const waitHrs = (nowMs - createdDt.getTime()) / 3600000;
+            if (waitHrs >= 24) unconfirmed24h++;
+            if (waitHrs >= 48) unconfirmed48h++;
+          }
         }
 
         const dueKey = x.due ? tmDayKey_(x.due) : '';
+        if (dueKey) {
+          const cd = calendarDays[dueKey] || (calendarDays[dueKey] = { total: 0, open: 0, overdue: 0, completed: 0, pending: 0, inProgress: 0 });
+          cd.total++;
+          if (t.Status === 'Completed') cd.completed++; else cd.open++;
+          if (x.overdue) cd.overdue++;
+          if (t.Status === 'Pending') cd.pending++;
+          if (t.Status === 'In Progress') cd.inProgress++;
+          if (upcomingByDate[dueKey]) {
+            const up = upcomingByDate[dueKey];
+            up.total++;
+            if (t.Status === 'Completed') up.completed++; else up.open++;
+            if (t.Status === 'Pending') up.pending++;
+            if (t.Status === 'In Progress') up.inProgress++;
+          }
+          calCandidates.push({ rec: x, dueKey, isOpen: t.Status !== 'Completed', dist: Math.abs(new Date(dueKey + 'T00:00:00').getTime() - todayMs) });
+        }
         if (t.Status === 'Completed') {
-          const compKey = t.CompletedAt ? tmDayKey_(tmAsDate_(t.CompletedAt)) : '';
+          const compKey = completedDt ? tmDayKey_(completedDt) : '';
           if (!dueKey || !compKey || compKey <= dueKey) completedOnTime++;
           else completedLate++;
+          if (completedDt) {
+            if (createdDt && completedDt.getTime() >= createdDt.getTime()) {
+              leadDaysSum += (completedDt.getTime() - createdDt.getTime()) / 86400000;
+              leadCount++;
+            }
+            const startDt = receivedDt || createdDt;
+            if (startDt && completedDt.getTime() >= startDt.getTime()) {
+              cycleDaysSum += (completedDt.getTime() - startDt.getTime()) / 86400000;
+              cycleCount++;
+            }
+          }
         } else {
+          if (createdDt) {
+            const cDayMs = new Date(tmDayKey_(createdDt) + 'T00:00:00').getTime();
+            const ageDays = Math.max(0, Math.round((todayMs - cDayMs) / 86400000));
+            if (ageDays <= 3) ageBuckets.d0_3++;
+            else if (ageDays <= 7) ageBuckets.d4_7++;
+            else if (ageDays <= 14) ageBuckets.d8_14++;
+            else ageBuckets.d15_plus++;
+            if (!dueKey && ageDays > 7) staleNoDue++;
+          }
           if (x.overdue) {
             const daysLate = dueKey ? Math.max(1, Math.round((todayMs - new Date(dueKey + 'T00:00:00').getTime()) / 86400000)) : 1;
             overdueItems.push({ rec: x, daysLate });
@@ -2204,26 +2600,59 @@
       const drill = selected.filter(x => !statusFilter || (statusFilter === 'Overdue' ? x.overdue : x.task.Status === statusFilter));
       drill.sort((a, b) => tmSortKey_(a.task).localeCompare(tmSortKey_(b.task)) || String(a.task.Title).localeCompare(String(b.task.Title)));
 
+      const shapedById = {};
+      const shapeOnce = async t => {
+        const id = String(t.TaskID);
+        if (!shapedById[id]) shapedById[id] = await tmShapeTask_(t, access, hier.byCode);
+        return shapedById[id];
+      };
+
       const offset = Math.max(0, Math.min(100000, Number(f.offset) || 0));
       const page = drill.slice(offset, offset + PAGE_SIZE);
-      const shapedDrill = await Promise.all(page.map(x => tmShapeTask_(x.task, access, hier.byCode)));
+      const shapedDrill = await Promise.all(page.map(x => shapeOnce(x.task)));
 
       overdueItems.sort((a, b) => b.daysLate - a.daysLate);
       const topOverdue = await Promise.all(overdueItems.slice(0, 6).map(async it => {
-        const s = await tmShapeTask_(it.rec.task, access, hier.byCode);
+        const s = Object.assign({}, await shapeOnce(it.rec.task));
         s.DaysLate = it.daysLate;
         return s;
       }));
-      const dueTodayList = await Promise.all(dueTodayItems.slice(0, 6).map(it => tmShapeTask_(it.task, access, hier.byCode)));
-      const awaitingConfirmList = await Promise.all(awaitingItems.slice(0, 6).map(it => tmShapeTask_(it.task, access, hier.byCode)));
+      const dueTodayList = await Promise.all(dueTodayItems.slice(0, 6).map(it => shapeOnce(it.task)));
+      const awaitingConfirmList = await Promise.all(awaitingItems.slice(0, 6).map(it => shapeOnce(it.task)));
+
+      calCandidates.sort((a, b) => (a.isOpen === b.isOpen ? (a.dist - b.dist || a.dueKey.localeCompare(b.dueKey)) : (a.isOpen ? -1 : 1)));
+      const calendarTasks = await Promise.all(calCandidates.slice(0, 200).map(it => shapeOnce(it.rec.task)));
 
       const doneTotal = completedOnTime + completedLate;
       const onTimeRate = doneTotal ? Math.round(completedOnTime * 1000 / doneTotal) / 10 : (counts.Total ? Math.round((counts.Total - counts.Overdue) * 1000 / counts.Total) / 10 : 100);
 
+      const empList = values(byEmployee);
+      const openVals = empList.map(e => e.open || 0);
+      const avgOpen = empList.length ? Math.round((openVals.reduce((a, b) => a + b, 0) / empList.length) * 10) / 10 : 0;
+      const maxOpen = openVals.length ? Math.max(...openVals) : 0;
+      const overloadThreshold = Math.max(5, Math.ceil(avgOpen * 1.8));
+      const heavyThreshold = Math.max(3, Math.ceil(avgOpen * 1.25));
+      const workload = { avgOpen, maxOpen, overloadThreshold, overloadedCount: 0, heavyCount: 0, optimalCount: 0, idleCount: 0 };
+      empList.forEach(e => {
+        if ((e.open || 0) >= overloadThreshold || (e.overdue || 0) >= 3) { e.loadBand = 'overloaded'; workload.overloadedCount++; }
+        else if ((e.open || 0) >= heavyThreshold) { e.loadBand = 'heavy'; workload.heavyCount++; }
+        else if ((e.open || 0) > 0) { e.loadBand = 'optimal'; workload.optimalCount++; }
+        else { e.loadBand = 'idle'; workload.idleCount++; }
+      });
+
+      const thisWeekBucket = weekly[weekly.length - 1] || { created: 0, completed: 0 };
+      const netDeltaThisWeek = (thisWeekBucket.created || 0) - (thisWeekBucket.completed || 0);
+      const netDelta6Weeks = weekly.reduce((s, w) => s + ((w.created || 0) - (w.completed || 0)), 0);
+      const avgAckHours = ackCount ? Math.round((ackHoursSum / ackCount) * 10) / 10 : null;
+      const avgCycleDays = cycleCount ? Math.round((cycleDaysSum / cycleCount) * 10) / 10 : null;
+      const avgLeadDays = leadCount ? Math.round((leadDaysSum / leadCount) * 10) / 10 : null;
+      const reopenRate = counts.Total ? Math.round(reopenedCount * 1000 / counts.Total) / 10 : 0;
+
       return {
         ok: true,
         employeeOnly: false,
-        asOf: tmStamp_(new Date()),
+        fromCache: !!taskRes.fromCache,
+        asOf: tmStamp_(taskRes.fetchedAt || new Date()),
         counts,
         options,
         openTotal: (counts.Pending || 0) + (counts['In Progress'] || 0),
@@ -2236,20 +2665,39 @@
           completedLate,
           onTimeRate,
           selfTasks,
-          managerTasks
+          managerTasks,
+          avgAckHours,
+          unconfirmed24h,
+          unconfirmed48h,
+          avgCycleDays,
+          avgLeadDays,
+          createdThisWeek: thisWeekBucket.created || 0,
+          completedThisWeek: thisWeekBucket.completed || 0,
+          netDeltaThisWeek,
+          netDelta6Weeks,
+          reopenedCount,
+          totalReopens,
+          reopenRate,
+          staleNoDue
         },
+        ageBuckets,
+        workload,
         byRegion: values(byRegion).slice(0, 12),
         byState: values(byState).slice(0, 20),
         byLocation: values(byLocation).slice(0, 20),
         byRole: values(byRole).slice(0, 20),
-        byEmployee: values(byEmployee).slice(0, 50),
+        byEmployee: empList.slice(0, 50),
         byNazim: canFilterAll ? values(byNazim).slice(0, 12) : [],
+        byPriority,
         due: byDue,
         weekly: weekly.map(w => ({ label: w.label, created: w.created, completed: w.completed })),
         trends: Object.keys(byCreated).sort().slice(-6).map(month => ({ month, created: byCreated[month], completed: byCompleted[month] || 0 })),
         topOverdue,
         dueTodayList,
         awaitingConfirmList,
+        upcomingLoad,
+        calendarDays,
+        calendarTasks,
         drilldown: {
           status: statusFilter,
           total: drill.length,
@@ -2694,6 +3142,10 @@
           MIN_PASSWORD_LENGTH: Number(cfg.MIN_PASSWORD_LENGTH) || 8,
           ESCALATION_ENABLED: tmYN_(cfg.ESCALATION_ENABLED),
           ARCHIVE_AFTER_DAYS: Number(cfg.ARCHIVE_AFTER_DAYS) || 60,
+          MAX_URGENT_TASKS: Number(cfg.MAX_URGENT_TASKS) || TM_DEFAULTS.MAX_URGENT_TASKS,
+          MAX_HIGH_TASKS: Number(cfg.MAX_HIGH_TASKS) || TM_DEFAULTS.MAX_HIGH_TASKS,
+          MAX_NORMAL_TASKS: cfg.MAX_NORMAL_TASKS === 0 || cfg.MAX_NORMAL_TASKS === '0' ? 0 : (Number(cfg.MAX_NORMAL_TASKS) || TM_DEFAULTS.MAX_NORMAL_TASKS),
+          MAX_LOW_TASKS: cfg.MAX_LOW_TASKS === 0 || cfg.MAX_LOW_TASKS === '0' ? 0 : (Number(cfg.MAX_LOW_TASKS) || TM_DEFAULTS.MAX_LOW_TASKS),
           EMAIL_GREETING: cfg.EMAIL_GREETING || TM_DEFAULTS.EMAIL_GREETING,
           EMAIL_SIGN_OFF: cfg.EMAIL_SIGN_OFF || TM_DEFAULTS.EMAIL_SIGN_OFF
         },
@@ -2720,6 +3172,10 @@
         MIN_PASSWORD_LENGTH: intVal('MIN_PASSWORD_LENGTH', 'Minimum password length', 6, 32),
         ESCALATION_ENABLED: tmYN_(s.ESCALATION_ENABLED),
         ARCHIVE_AFTER_DAYS: intVal('ARCHIVE_AFTER_DAYS', 'Archive completed tasks after (days)', 7, 365),
+        MAX_URGENT_TASKS: intVal('MAX_URGENT_TASKS', 'Max open Urgent tasks per employee', 1, 20),
+        MAX_HIGH_TASKS: intVal('MAX_HIGH_TASKS', 'Max open High tasks per employee', 1, 30),
+        MAX_NORMAL_TASKS: intVal('MAX_NORMAL_TASKS', 'Max open Normal tasks per employee (0 = unlimited)', 0, 200),
+        MAX_LOW_TASKS: intVal('MAX_LOW_TASKS', 'Max open Low tasks per employee (0 = unlimited)', 0, 200),
         EMAIL_GREETING: tmClip_(s.EMAIL_GREETING, 100) || TM_DEFAULTS.EMAIL_GREETING,
         EMAIL_SIGN_OFF: tmClip_(s.EMAIL_SIGN_OFF, 100) || TM_DEFAULTS.EMAIL_SIGN_OFF
       };
