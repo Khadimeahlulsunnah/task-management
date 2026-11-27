@@ -533,12 +533,25 @@
 
   async function fetchPublicKeys_(codes) {
     const map = {};
-    await Promise.all(codes.map(async c => {
-      try {
-        const snap = await db.collection('userKeys').doc(String(c)).get();
-        if (snap.exists && snap.data().publicKeyJwk) map[String(c)] = snap.data().publicKeyJwk;
-      } catch (e) { /* ignore missing keys */ }
-    }));
+    const toFetch = [];
+    codes.forEach(raw => {
+      const c = String(raw);
+      const cached = _MEMO['ukey:' + c];
+      if (cached) map[c] = cached;
+      else toFetch.push(c);
+    });
+    if (toFetch.length) {
+      await Promise.all(toFetch.map(async c => {
+        try {
+          const snap = await db.collection('userKeys').doc(c).get();
+          if (snap.exists && snap.data().publicKeyJwk) {
+            const jwk = snap.data().publicKeyJwk;
+            _MEMO['ukey:' + c] = jwk;
+            map[c] = jwk;
+          }
+        } catch (e) { /* ignore missing keys */ }
+      }));
+    }
     return map;
   }
 
@@ -1505,10 +1518,12 @@
       if (!specs.length) throw new Error('Please add at least one task.');
       if (specs.length > 200) throw new Error('A single save can create at most 200 tasks.');
 
+      const creatorAccess = await tmAccess_(user);
       const targetKeyCache = {};
       const missingKeyTargets = new Set();
       const taskRowsForMail = {};
       const taskIds = [];
+      const createdTasks = [];
       const taskWrites = [];
       const subWrites = [];
 
@@ -1585,6 +1600,38 @@
 
         (taskRowsForMail[sp.target] = taskRowsForMail[sp.target] || []).push(taskData);
         taskWrites.push({ ref: db.collection('tasks').doc(taskId), data: taskData });
+        const isSelf = String(sp.target) === String(user.EmpCode);
+        createdTasks.push({
+          TaskID: taskId,
+          Title: sp.title,
+          Description: sp.description,
+          IsConfidential: isConfidential,
+          DecryptLocked: false,
+          AssignedBy: String(user.EmpCode),
+          AssignedByName: String(user.EmpName || user.EmpCode),
+          AssignedTo: String(emp.EmpCode || sp.target),
+          AssignedToName: String(emp.EmpName || sp.target),
+          SelfAssigned: isSelf,
+          GivenByNazim: !isSelf && String(emp.Nazim || '') === String(user.EmpCode),
+          Region: String(emp.Region || ''),
+          State: String(emp.State || ''),
+          Division: String(emp.Division || ''),
+          Due: tmDayKey_(sp.due || defaultDue),
+          Status: 'Pending',
+          Overdue: tmOverdue_(sp.due || defaultDue, 'Pending'),
+          Created: tmStamp_(now),
+          Updated: tmStamp_(now),
+          ReceivedAt: tmStamp_(receivedAt),
+          NeedsAck: false,
+          Completed: '',
+          Reminders: 0,
+          LastReminder: '',
+          CanUpdate: tmCanUpdate_(creatorAccess, taskData),
+          CanManage: tmCanManage_(creatorAccess, taskData),
+          CanDelete: tmCanDelete_(creatorAccess, taskData),
+          CanRemind: tmCanRemind_(creatorAccess, taskData),
+          Mine: isSelf
+        });
 
         subWrites.push({
           ref: db.collection('taskHistory').doc(),
@@ -1634,6 +1681,7 @@
         ok: true,
         taskId: taskIds[0],
         taskIds,
+        createdTasks,
         count: taskIds.length,
         recipients: recipients.length,
         mail,
@@ -1710,6 +1758,7 @@
           const e = hier.byCode[target];
           updates.AssignedTo = e.EmpCode;
           updates.Region = e.Region || '';
+          updates.State = e.State || '';
           updates.Division = e.Division || '';
           updates.WatcherCodes = getWatcherCodes_(e.EmpCode, task.AssignedBy, hier);
           changedFields.push('assignee');
@@ -1766,15 +1815,15 @@
       await batch.commit();
 
       let mail = null;
+      const freshTask = Object.assign({}, task, updates);
       if (reopening && reopenRecipient) {
         try {
-          const freshTask = Object.assign({}, task, updates);
           mail = await tmMailReopen_(freshTask, reopenRecipient, user, reopenRemark, hier.byCode);
         } catch (e) {
           mail = { error: e.message };
         }
       }
-      return { ok: true, mail };
+      return { ok: true, mail, task: await tmShapeTask_(freshTask, access, hier.byCode) };
     },
 
     // 6. Bulk Update Tasks
@@ -1790,6 +1839,7 @@
       const now = new Date();
       const batch = db.batch();
       let updated = 0;
+      const updatedIds = [];
       const failed = [];
       const reopenMails = [];
 
@@ -1826,6 +1876,7 @@
           WatcherCodes: t.WatcherCodes || getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier)
         });
         updated++;
+        updatedIds.push(id);
         if (reopening && emp) reopenMails.push({ task: Object.assign({}, t, updates), emp });
       }
 
@@ -1838,6 +1889,7 @@
         ok: true,
         count: updated,
         updated,
+        updatedIds,
         failed,
         message: `${updated} task(s) updated; ${failed.length} item(s) could not be applied.`
       };
