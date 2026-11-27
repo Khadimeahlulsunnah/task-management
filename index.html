@@ -264,6 +264,14 @@ button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 .mail-stat small{font-size:.78rem;color:var(--muted);font-weight:600}
 .mail-stat b{font-size:1.25rem;color:var(--ink)}
 .mail-stat span{font-size:.8rem;color:var(--muted)}
+.imp-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:16px}
+.imp-type{border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--paper);text-align:left;cursor:pointer;display:grid;gap:4px;transition:all .15s}
+.imp-type:hover{border-color:var(--line2);background:var(--hover)}
+.imp-type[aria-pressed=true]{border-color:var(--brand);background:var(--brand-s);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 16%,transparent)}
+.imp-type b{font-size:.96rem;color:var(--ink)}
+.imp-type small{font-size:.8rem;color:var(--muted)}
+.imp-drop{border:2px dashed var(--line2);border-radius:16px;padding:26px 18px;text-align:center;background:var(--paper);cursor:pointer;transition:border-color .15s,background .15s;display:grid;gap:8px;justify-items:center}
+.imp-drop:hover,.imp-drop.drag{border-color:var(--brand);background:var(--brand-s)}
 .tpl-group+.tpl-group{margin-top:10px}.tpl-head{padding:6px 5px 4px;font-size:.84rem}.tpl-head b{font-size:.9rem}
 .assignee-option input[type=checkbox]{width:18px;height:18px;accent-color:var(--brand);flex:none}
 
@@ -674,7 +682,7 @@ const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).
 const stClass = s => 'st-' + String(s).replace(/\s/g, '');
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, pick: {} };
+const S = { token: '', boot: null, view: 'mine', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, importType: 'people', importMeta: null, importPreview: null, importResult: null, importFileName: '', pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -782,7 +790,7 @@ function enter(r) {
   S.data.mine = r.mine; S.data.team = r.team; S.fresh.mine = S.fresh.team = Date.now(); S.filters = { mine: {}, team: {} };
   S.ackTasks = (r.mine && Array.isArray(r.mine.ackTasks)) ? r.mine.ackTasks : [];
   S.selected.mine.clear(); S.selected.team.clear();
-  S.dashboard = null; S.dashFilters = {}; S.mailData = null; S.mailTab = 'send'; S.mailManagerSearch = ''; S.mailManagerCodes.clear(); S.mailManagerLoaded = false;
+  S.dashboard = null; S.dashFilters = {}; S.mailData = null; S.mailTab = 'send'; S.mailManagerSearch = ''; S.mailManagerCodes.clear(); S.mailManagerLoaded = false; S.importMeta = null; S.importPreview = null; S.importResult = null; S.importFileName = '';
   if (S.view === 'team' && !r.user.hasTeam) S.view = 'mine';
   if (S.view === 'dashboard' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
   if (S.view === 'mail' && !(r.user.isNazim || r.user.isAdmin)) S.view = 'mine';
@@ -2480,7 +2488,7 @@ async function signOut(all, btn) {
 }
 
 /* ================= admin ================= */
-const ADMIN_TABS = [['overview', 'Overview'], ['people', 'People'], ['roles', 'Roles'], ['templates', 'Task templates'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
+const ADMIN_TABS = [['overview', 'Overview'], ['people', 'People'], ['roles', 'Roles'], ['templates', 'Task templates'], ['import', 'Import'], ['reminders', 'Reminders'], ['settings', 'Settings'], ['system', 'System check']];
 function renderAdmin() {
   mount($('#view'), h`<div class="subtabs" role="tablist">${ADMIN_TABS.map(t => h`<button class="subtab" role="tab" data-act="admintab" data-t="${t[0]}" ${S.adminTab === t[0] ? 'aria-current=page' : ''}>${t[1]}</button>`)}</div><div id="adm"></div>`);
   adminLoad();
@@ -2492,6 +2500,7 @@ async function adminLoad() {
     else if (tab === 'people') await adminPeople();
     else if (tab === 'roles') await adminRoles();
     else if (tab === 'templates') await adminTemplates();
+    else if (tab === 'import') await adminImport();
     else if (tab === 'reminders') await adminSched();
     else if (tab === 'settings') await adminSettings();
     else adminSystem();
@@ -2525,7 +2534,7 @@ async function adminOverview() {
 async function adminPeople() {
   const r = await api('apiAdminPeople', S.token); if (!inAdmin('people')) return;
   S.admin.people = r.people; S.admin.roleNames = r.roles; S.admin.regionNames = r.regions; S.admin.q = S.admin.q || '';
-  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><button class="btn primary" data-act="addperson">+ Add person</button></div>
+  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;margin-bottom:12px"><input class="cell-in" style="max-width:300px" data-in="peopleq" type="search" placeholder="Search people" value="${S.admin.q}" aria-label="Search people" maxlength="100"><div class="actions"><button class="btn" data-act="goimport" data-kind="people">⬆ Import Excel</button><button class="btn primary" data-act="addperson">+ Add person</button></div></div>
     <div class="scroll-x"><table class="tbl"><thead><tr><th>Name</th><th>Code</th><th>Role</th><th>Region</th><th>Manager</th><th>Status</th></tr></thead><tbody id="ptbody"></tbody></table></div></div>`);
   paintPeople();
 }
@@ -2563,7 +2572,7 @@ async function adminTemplates() {
 const tplShownFor = t => t.all ? h`<span class="task-origin">All designations</span>` : t.roles.length ? h`${t.roles.map(r => h`<span class="task-origin" style="margin:0 4px 4px 0">${r}</span>`)}` : h`<small class="muted">Not shown to anyone</small>`;
 function paintAdminTemplates() {
   const list = S.admin.tpls || [];
-  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">Task templates</h3><button class="btn primary" data-act="newtpl">+ New template</button></div>
+  mount($('#adm'), h`<div class="panel"><div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">Task templates</h3><div class="actions"><button class="btn" data-act="goimport" data-kind="templates">⬆ Import Excel</button><button class="btn primary" data-act="newtpl">+ New template</button></div></div>
     <p class="muted">A template is a ready-made task (title, description). Nazims and admins pick it instead of typing. Choose which <b>designations</b> each template is shown for; the designation is the one held by the <b>employee receiving</b> the task. Switch a template off to hide it from everyone without deleting it.</p>
     ${list.length ? h`<div class="scroll-x"><table class="tbl"><thead><tr><th>Template</th><th>Shown for</th><th>On</th><th></th></tr></thead><tbody>${list.map(t => h`<tr><td><b>${t.title}</b>${t.description && h`<br><small class="muted">${t.description.length > 90 ? t.description.slice(0, 90) + '…' : t.description}</small>`}</td><td>${tplShownFor(t)}</td><td><label class="sw"><input type="checkbox" data-ch="tplactive" data-id="${t.id}" ${t.active ? 'checked' : ''} aria-label="Template is on"><span></span></label></td><td><button class="btn sm" data-act="edittpl" data-id="${t.id}">Edit</button></td></tr>`)}</tbody></table></div>` : h`<div class="empty"><b>No templates yet</b>Create your first one, for example “Prepare monthly salary register”.</div>`}</div>`);
 }
@@ -2602,7 +2611,397 @@ function paintRoles() {
     ${S.admin.roles.map((r, i) => h`<tr><td>${r.isNew ? h`<input class="cell-in" data-bind="roles" data-i="${i}" data-k="Role" value="${r.Role}" placeholder="Role name" aria-label="Role name" maxlength="80">` : h`<b>${r.Role}</b>`}</td>
       <td>${sw('roles', i, 'IsHeadOffice', r.IsHeadOffice)}</td><td>${sw('roles', i, 'IsAdmin', r.IsAdmin)}</td><td>${sw('roles', i, 'Active', r.Active)}</td>
       <td>${r.isNew ? h`<button class="btn ghost sm" data-act="rmrole" data-i="${i}" aria-label="Remove">✕</button>` : ''}</td></tr>`)}</tbody></table></div>
-    <div class="actions" style="margin-top:14px"><button class="btn" data-act="addrole">+ Add role</button><button class="btn primary" data-act="saveroles" data-busy="Saving">Save roles</button></div><div id="rl-err" class="notice bad" hidden style="margin-top:12px"></div></div>`);
+    <div class="actions" style="margin-top:14px"><button class="btn" data-act="addrole">+ Add role</button><button class="btn" data-act="goimport" data-kind="roles">⬆ Import Excel</button><button class="btn primary" data-act="saveroles" data-busy="Saving">Save roles</button></div><div id="rl-err" class="notice bad" hidden style="margin-top:12px"></div></div>`);
+}
+
+/* ---- admin: master excel import ---- */
+const XLSX_CDN = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+let xlsxPromise = null;
+function ensureXlsxLib() {
+  if (window.XLSX) return Promise.resolve(true);
+  if (!xlsxPromise) {
+    xlsxPromise = new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = XLSX_CDN;
+      s.async = true;
+      const timer = setTimeout(() => resolve(!!window.XLSX), 7000);
+      s.onload = () => { clearTimeout(timer); resolve(!!window.XLSX); };
+      s.onerror = () => { clearTimeout(timer); resolve(false); };
+      document.head.appendChild(s);
+    });
+  }
+  return xlsxPromise;
+}
+
+const IMPORT_SCHEMAS = {
+  people: {
+    title: 'People (with Passwords)',
+    sub: 'Bulk-create new employees, login accounts, hierarchy, and encryption keys (max 100/upload).',
+    file: 'TaskManagement_People_Template',
+    cols: ['EmpCode', 'EmpName', 'Role', 'Region', 'Division', 'Nazim', 'Email', 'Password'],
+    aliases: { empcode: 'EmpCode', employeecode: 'EmpCode', code: 'EmpCode', empname: 'EmpName', fullname: 'EmpName', name: 'EmpName', role: 'Role', designation: 'Role', region: 'Region', division: 'Division', office: 'Division', nazim: 'Nazim', manager: 'Nazim', managercode: 'Nazim', email: 'Email', password: 'Password', initialpassword: 'Password' },
+    sample: meta => [
+      { EmpCode: 'EMP101', EmpName: 'Example Supervisor', Role: (meta.roles[1] || meta.roles[0] || 'Accountant Supervisor'), Region: (meta.regions[0] || 'Mumbai'), Division: 'Accounts', Nazim: '', Email: 'emp101@example.com', Password: 'ChangeMe@123' },
+      { EmpCode: 'EMP102', EmpName: 'Example Staff', Role: (meta.roles[0] || 'Accountant'), Region: (meta.regions[0] || 'Mumbai'), Division: 'Accounts', Nazim: 'EMP101', Email: 'emp102@example.com', Password: 'ChangeMe@456' }
+    ],
+    notes: [
+      'EmpCode: Unique code (letters, numbers, dot, dash, underscore; max 30 chars). Existing codes are skipped.',
+      'Role & Region: Must match an active Role and Region (see Reference sheet).',
+      'Nazim: Optional manager EmpCode (can reference another row in this same Excel file).',
+      'Password: Initial password (min 6 characters, cannot match EmpCode).'
+    ]
+  },
+  roles: {
+    title: 'Roles',
+    sub: 'Bulk-create new job roles and Head Office / Admin permissions (max 200/upload).',
+    file: 'TaskManagement_Roles_Template',
+    cols: ['Role', 'IsHeadOffice', 'IsAdmin', 'Active'],
+    aliases: { role: 'Role', rolename: 'Role', designation: 'Role', isheadoffice: 'IsHeadOffice', headoffice: 'IsHeadOffice', isadmin: 'IsAdmin', admin: 'IsAdmin', active: 'Active' },
+    sample: () => [
+      { Role: 'Regional Auditor', IsHeadOffice: 'N', IsAdmin: 'N', Active: 'Y' },
+      { Role: 'Compliance Reviewer', IsHeadOffice: 'Y', IsAdmin: 'N', Active: 'Y' }
+    ],
+    notes: [
+      'Role: Unique role name (max 80 chars). Existing roles are skipped.',
+      'IsHeadOffice / IsAdmin / Active: Enter Y or N (Active defaults to Y).'
+    ]
+  },
+  templates: {
+    title: 'Task Templates',
+    sub: 'Bulk-create reusable task templates for designations (max 200/upload).',
+    file: 'TaskManagement_Templates_Template',
+    cols: ['Title', 'Description', 'AllDesignations', 'Roles', 'Active'],
+    aliases: { title: 'Title', tasktitle: 'Title', templatetitle: 'Title', description: 'Description', desc: 'Description', notes: 'Description', alldesignations: 'AllDesignations', all: 'AllDesignations', roles: 'Roles', designations: 'Roles', active: 'Active' },
+    sample: meta => [
+      { Title: 'Prepare monthly salary register', Description: 'Compile attendance, deductions, and final payroll sheet.', AllDesignations: 'N', Roles: (meta.roles[0] || 'Accountant'), Active: 'Y' },
+      { Title: 'Weekly compliance self-review', Description: 'Verify all branch vouchers are uploaded.', AllDesignations: 'Y', Roles: '', Active: 'Y' }
+    ],
+    notes: [
+      'Title: Unique template title (max 200 chars). Existing template titles are skipped.',
+      'AllDesignations: Y to show for every role, or N to restrict to specific Roles.',
+      'Roles: Comma-separated active role names (required when AllDesignations is N).'
+    ]
+  }
+};
+
+function parseCsvText(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  const s = String(text || '').replace(/^\uFEFF/, '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i], n = s[i + 1];
+    if (q) {
+      if (c === '"' && n === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\r' && n === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; i++; }
+      else if (c === '\n' || c === '\r') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  const headers = rows[0].map(h => String(h || '').trim());
+  return rows.slice(1).filter(r => r.some(v => String(v || '').trim() !== '')).map(r => {
+    const obj = {};
+    headers.forEach((h, idx) => { if (h) obj[h] = r[idx] == null ? '' : String(r[idx]); });
+    return obj;
+  });
+}
+
+function toCsvText(cols, rows) {
+  const escCsv = v => {
+    const s = String(v == null ? '' : v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return [cols.map(escCsv).join(',')].concat(rows.map(r => cols.map(c => escCsv(r[c])).join(','))).join('\r\n');
+}
+
+async function downloadImportTemplate(kind, format) {
+  const schema = IMPORT_SCHEMAS[kind];
+  if (!schema) return;
+  const meta = S.importMeta || { roles: S.boot?.lists?.roles || [], regions: S.boot?.lists?.regions || [] };
+  const sampleRows = schema.sample(meta);
+
+  const hasXlsx = format !== 'csv' && await ensureXlsxLib();
+  if (hasXlsx && window.XLSX) {
+    const wb = XLSX.utils.book_new();
+    const aoa = [schema.cols].concat(sampleRows.map(r => schema.cols.map(c => r[c] == null ? '' : r[c])));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = schema.cols.map(c => ({ wch: Math.max(16, c === 'Description' || c === 'Title' || c === 'Email' ? 32 : 18) }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+
+    const refRows = [['Field Rules'], ...schema.notes.map(n => [n]), [], ['Active Roles', 'Active Regions']];
+    const maxLen = Math.max((meta.roles || []).length, (meta.regions || []).length);
+    for (let i = 0; i < maxLen; i++) {
+      refRows.push([(meta.roles || [])[i] || '', (meta.regions || [])[i] || '']);
+    }
+    const wsRef = XLSX.utils.aoa_to_sheet(refRows);
+    wsRef['!cols'] = [{ wch: 36 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(wb, wsRef, 'Reference');
+    XLSX.writeFile(wb, schema.file + '.xlsx');
+    toast('Excel template downloaded (.xlsx).');
+    return;
+  }
+
+  const blob = new Blob([toCsvText(schema.cols, sampleRows)], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = schema.file + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  toast(format === 'csv' ? 'CSV template downloaded.' : 'Excel library unavailable offline; downloaded CSV template instead.');
+}
+
+function normalizeImportRows(kind, rawObjects) {
+  const schema = IMPORT_SCHEMAS[kind];
+  return rawObjects.map((raw, idx) => {
+    const norm = { _row: idx + 2 };
+    schema.cols.forEach(c => { norm[c] = ''; });
+    Object.keys(raw || {}).forEach(k => {
+      const cleanKey = String(k || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const target = schema.aliases[cleanKey];
+      if (target) norm[target] = String(raw[k] == null ? '' : raw[k]).trim();
+    });
+    return norm;
+  }).filter(r => schema.cols.some(c => r[c] !== ''));
+}
+
+function validateImportPreview(kind, rows) {
+  const meta = S.importMeta || { roles: [], regions: [], existingCodes: [], existingEmails: [], existingTemplateTitles: [], minPasswordLength: 6 };
+  const activeRoles = new Set(meta.roles || []);
+  const activeRegions = new Set(meta.regions || []);
+  const existingCodes = new Set((meta.existingCodes || []).map(x => String(x).toUpperCase()));
+  const existingEmails = new Set((meta.existingEmails || []).map(x => String(x).toLowerCase()));
+  const existingTitles = new Set((meta.existingTemplateTitles || []).map(x => String(x).toLowerCase()));
+  const seenBatch = new Set();
+  const seenEmails = new Set();
+
+  // For people, track codes inside this batch so subordinate rows referencing a batch Nazim pass preview validation
+  const batchCodes = new Set();
+  if (kind === 'people') {
+    rows.forEach(r => { const c = (r.EmpCode || '').toUpperCase(); if (c && !existingCodes.has(c)) batchCodes.add(c); });
+  }
+
+  return rows.map(r => {
+    if (kind === 'people') {
+      const code = (r.EmpCode || '').toUpperCase();
+      r.EmpCode = code;
+      r.Nazim = (r.Nazim || '').toUpperCase();
+      if (!code) return { row: r, status: 'ERROR', msg: 'EmpCode is required.' };
+      if (!/^[A-Za-z0-9._-]{1,30}$/.test(code)) return { row: r, status: 'ERROR', msg: 'EmpCode contains invalid characters.' };
+      if (existingCodes.has(code)) return { row: r, status: 'SKIP', msg: 'Already exists in directory.' };
+      if (seenBatch.has(code)) return { row: r, status: 'ERROR', msg: 'Duplicate EmpCode in file.' };
+      seenBatch.add(code);
+      if (!r.EmpName) return { row: r, status: 'ERROR', msg: 'EmpName is required.' };
+      if (!activeRoles.has(r.Role)) return { row: r, status: 'ERROR', msg: `Role "${r.Role || '(blank)'}" is unknown or off.` };
+      if (!activeRegions.has(r.Region)) return { row: r, status: 'ERROR', msg: `Region "${r.Region || '(blank)'}" is unknown or off.` };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.Email || '')) return { row: r, status: 'ERROR', msg: 'Valid Email is required.' };
+      const lowEmail = r.Email.toLowerCase();
+      if (existingEmails.has(lowEmail) || seenEmails.has(lowEmail)) return { row: r, status: 'ERROR', msg: 'Email already used.' };
+      seenEmails.add(lowEmail);
+      if (r.Nazim === code) return { row: r, status: 'ERROR', msg: 'Cannot be own Nazim.' };
+      if (r.Nazim && !existingCodes.has(r.Nazim) && !batchCodes.has(r.Nazim)) return { row: r, status: 'ERROR', msg: `Nazim "${r.Nazim}" not found.` };
+      const minPw = Math.min(Number(meta.minPasswordLength) || 8, 6);
+      if (!r.Password || r.Password.length < minPw) return { row: r, status: 'ERROR', msg: `Password min ${minPw} chars.` };
+      if (r.Password.toLowerCase() === code.toLowerCase()) return { row: r, status: 'ERROR', msg: 'Password cannot equal EmpCode.' };
+      return { row: r, status: 'READY', msg: 'Ready to create' };
+    }
+
+    if (kind === 'roles') {
+      const name = r.Role || '';
+      if (!name) return { row: r, status: 'ERROR', msg: 'Role name is required.' };
+      const low = name.toLowerCase();
+      if (new Set((meta.allRoleNames || meta.roles || []).map(x => x.toLowerCase())).has(low)) return { row: r, status: 'SKIP', msg: 'Role already exists.' };
+      if (seenBatch.has(low)) return { row: r, status: 'ERROR', msg: 'Duplicate Role in file.' };
+      seenBatch.add(low);
+      return { row: r, status: 'READY', msg: 'Ready to create' };
+    }
+
+    /* templates */
+    const title = r.Title || '';
+    if (!title) return { row: r, status: 'ERROR', msg: 'Title is required.' };
+    const lowT = title.toLowerCase();
+    if (existingTitles.has(lowT)) return { row: r, status: 'SKIP', msg: 'Template title already exists.' };
+    if (seenBatch.has(lowT)) return { row: r, status: 'ERROR', msg: 'Duplicate Title in file.' };
+    seenBatch.add(lowT);
+    const isAll = /^(y|yes|true|1)$/i.test(r.AllDesignations || '');
+    const roleList = String(r.Roles || '').split(/[,;|]/).map(s => s.trim()).filter(Boolean);
+    const badRoles = roleList.filter(x => !activeRoles.has(x));
+    if (!isAll && badRoles.length) return { row: r, status: 'ERROR', msg: 'Unknown role(s): ' + badRoles.join(', ') };
+    if (!isAll && !roleList.length && !/^(n|no|false|0)$/i.test(r.Active || 'Y')) return { row: r, status: 'ERROR', msg: 'Specify Roles or set AllDesignations=Y.' };
+    return { row: r, status: 'READY', msg: 'Ready to create' };
+  });
+}
+
+async function handleImportFile(file) {
+  if (!file) return;
+  const kind = S.importType || 'people';
+  S.importFileName = file.name;
+  S.importResult = null;
+  try {
+    let rawObjects = [];
+    if (/\.csv$/i.test(file.name)) {
+      const txt = await file.text();
+      rawObjects = parseCsvText(txt);
+    } else {
+      const ok = await ensureXlsxLib();
+      if (!ok || !window.XLSX) {
+        return toast('Excel parser could not load (check internet connection) or save the file as .csv and upload.', true);
+      }
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames[0];
+      if (!sheetName) return toast('No worksheet found in this Excel file.', true);
+      rawObjects = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+    }
+    const normalized = normalizeImportRows(kind, rawObjects);
+    if (!normalized.length) {
+      S.importPreview = null;
+      paintAdminImport();
+      return toast('No data rows found. Make sure column headers match the downloaded template.', true);
+    }
+    const maxRows = kind === 'people' ? 100 : 200;
+    if (normalized.length > maxRows) {
+      toast(`Showing first ${maxRows} rows (maximum ${maxRows} rows per upload).`, true);
+    }
+    S.importPreview = validateImportPreview(kind, normalized.slice(0, maxRows));
+    paintAdminImport();
+  } catch (err) {
+    toast('Could not read file: ' + (err.message || err), true);
+  }
+}
+
+async function runMasterImport(btn) {
+  const kind = S.importType || 'people';
+  const readyRows = (S.importPreview || []).filter(x => x.status === 'READY').map(x => x.row);
+  if (!readyRows.length) return toast('No valid rows ready to import.', true);
+  const apiName = kind === 'people' ? 'apiImportPeople' : kind === 'roles' ? 'apiImportRoles' : 'apiImportTemplates';
+  await busy(btn, async () => {
+    try {
+      const r = await api(apiName, S.token, readyRows);
+      S.importResult = r;
+      S.importPreview = null;
+      S.importMeta = await api('apiImportMeta', S.token).catch(() => S.importMeta);
+      toast(`Import complete: ${r.created} created, ${r.skipped} skipped, ${r.failed} failed.`);
+      if (inAdmin('import')) paintAdminImport();
+    } catch (e) {
+      if (!e.auth) toast(e.message, true);
+    }
+  });
+}
+
+async function adminImport() {
+  S.importMeta = await api('apiImportMeta', S.token);
+  if (!inAdmin('import')) return;
+  ensureXlsxLib();
+  paintAdminImport();
+}
+
+function paintAdminImport() {
+  const kind = S.importType || 'people', schema = IMPORT_SCHEMAS[kind];
+  const prev = S.importPreview, res = S.importResult;
+  const readyCnt = prev ? prev.filter(x => x.status === 'READY').length : 0;
+  const skipCnt = prev ? prev.filter(x => x.status === 'SKIP').length : 0;
+  const errCnt = prev ? prev.filter(x => x.status === 'ERROR').length : 0;
+
+  mount($('#adm'), h`<div style="display:grid;gap:16px">
+    <section class="panel" style="margin:0">
+      <h3>Master Excel Import</h3>
+      <p class="muted" style="margin-bottom:14px">Download an Excel template, fill in new master records, and upload it to create records in bulk. Existing records are safely skipped.</p>
+      <div class="imp-types" role="group" aria-label="Import type">
+        ${Object.keys(IMPORT_SCHEMAS).map(k => h`<button type="button" class="imp-type" data-act="imptype" data-k="${k}" aria-pressed="${kind === k}">
+          <b>${IMPORT_SCHEMAS[k].title}</b>
+          <small>${IMPORT_SCHEMAS[k].sub}</small>
+        </button>`)}
+      </div>
+
+      <div class="adm-grid">
+        <div class="panel" style="margin:0;background:var(--paper)">
+          <h3>1. Download Template</h3>
+          <p class="muted" style="font-size:.86rem">Columns: <code>${schema.cols.join(', ')}</code></p>
+          <ul style="margin:8px 0 14px 18px;padding:0;font-size:.83rem;color:var(--muted);display:grid;gap:4px">
+            ${schema.notes.map(n => h`<li>${n}</li>`)}
+          </ul>
+          <div class="actions">
+            <button type="button" class="btn primary" data-act="dltemplate" data-fmt="xlsx" data-busy="Preparing">⬇ Download Excel Template (.xlsx)</button>
+            <button type="button" class="btn sm" data-act="dltemplate" data-fmt="csv">Download CSV</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin:0;background:var(--paper)">
+          <h3>2. Upload Filled File</h3>
+          <input id="imp-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+          <div class="imp-drop" id="imp-drop" data-act="pickimpfile" tabindex="0" role="button" aria-label="Choose Excel or CSV file">
+            <b style="font-size:1rem">📄 Drop Excel (.xlsx / .xls) or CSV file here</b>
+            <small class="muted">${S.importFileName ? 'Last file: ' + S.importFileName : 'Or click to browse from your computer'}</small>
+            <span class="btn sm" style="margin-top:4px">Choose File</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    ${prev ? h`<section class="panel" style="margin:0">
+      <div class="actions" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <h3 style="margin:0">Preview: ${S.importFileName} (${prev.length} rows)</h3>
+          <small class="muted">
+            <b style="color:var(--ok)">${readyCnt} ready</b> ·
+            <b style="color:var(--warn)">${skipCnt} existing (will skip)</b> ·
+            <b style="color:var(--bad)">${errCnt} errors</b>
+          </small>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" data-act="clearimp">Clear</button>
+          <button type="button" class="btn primary" data-act="runimport" data-busy="Importing" ${readyCnt ? '' : 'disabled'}>Import ${readyCnt} Valid Record${readyCnt === 1 ? '' : 's'}</button>
+        </div>
+      </div>
+      <div class="scroll-x" style="max-height:420px;overflow-y:auto">
+        <table class="tbl">
+          <thead><tr><th>Row</th><th>Status</th>${schema.cols.map(c => h`<th>${c}</th>`)}<th>Validation</th></tr></thead>
+          <tbody>
+            ${prev.map(item => h`<tr>
+              <td class="num">${item.row._row}</td>
+              <td><span class="badge ${item.status === 'READY' ? 'b-PASS' : item.status === 'SKIP' ? 'b-WARN' : 'b-FAIL'}">${item.status}</span></td>
+              ${schema.cols.map(c => h`<td>${c === 'Password' ? (item.row[c] ? '•••••••• (' + item.row[c].length + ')' : '—') : (item.row[c] || '—')}</td>`)}
+              <td><small style="color:${item.status === 'ERROR' ? 'var(--bad)' : item.status === 'SKIP' ? 'var(--warn)' : 'var(--ok)'}">${item.msg}</small></td>
+            </tr>`)}
+          </tbody>
+        </table>
+      </div>
+    </section>` : ''}
+
+    ${res ? h`<section class="panel" style="margin:0">
+      <div class="notice ${res.failed ? 'warn' : 'ok'}" style="margin-bottom:12px">
+        <b>Import Complete:</b> ${res.created} created · ${res.skipped} skipped · ${res.failed} failed
+      </div>
+      <div class="scroll-x" style="max-height:360px;overflow-y:auto">
+        <table class="tbl">
+          <thead><tr><th>Row</th><th>Record</th><th>Result</th><th>Details</th></tr></thead>
+          <tbody>
+            ${(res.results || []).map(x => h`<tr>
+              <td class="num">${x.row}</td>
+              <td><b>${x.key}</b></td>
+              <td><span class="badge ${x.status === 'CREATED' ? 'b-PASS' : x.status === 'SKIPPED' ? 'b-WARN' : 'b-FAIL'}">${x.status}</span></td>
+              <td>${x.message}</td>
+            </tr>`)}
+          </tbody>
+        </table>
+      </div>
+    </section>` : ''}
+  </div>`);
+
+  const drop = $('#imp-drop');
+  if (drop) {
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('drag');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+    });
+  }
 }
 
 async function adminSched() {
@@ -2922,6 +3321,12 @@ const ACT = {
   showpw: el => { const i = $('#li-pw'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.textContent = show ? 'Hide' : 'Show'; },
   signout: el => signOut(false), signoutall: el => signOut(true, el), restart: () => location.reload(),
   admintab: el => { S.adminTab = el.dataset.t; renderAdmin(); },
+  goimport: el => { S.importType = el.dataset.kind || 'people'; S.importPreview = null; S.importResult = null; S.adminTab = 'import'; renderAdmin(); },
+  imptype: el => { S.importType = el.dataset.k; S.importPreview = null; S.importResult = null; S.importFileName = ''; paintAdminImport(); },
+  dltemplate: el => busy(el, () => downloadImportTemplate(S.importType || 'people', el.dataset.fmt || 'xlsx')),
+  pickimpfile: () => { const f = $('#imp-file'); if (f) { f.value = ''; f.click(); } },
+  clearimp: () => { S.importPreview = null; S.importResult = null; S.importFileName = ''; paintAdminImport(); },
+  runimport: el => runMasterImport(el),
   addperson: () => openPerson(''), editperson: el => openPerson(el.dataset.c),
   newtpl: () => openTemplate(''), edittpl: el => openTemplate(el.dataset.id),
   deltpl: el => { if (!window.confirm('Delete this template? Tasks already created from it are not affected.')) return; busy(el, async () => { try { await api('apiDeleteTemplate', S.token, el.dataset.id); closeDrawer(true); toast('Template deleted.'); if (inAdmin('templates')) adminTemplates(); } catch (e) { if (!e.auth) toast(e.message, true); } }); },
@@ -3026,6 +3431,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const el = e.target;
+  if (el.id === 'imp-file' && el.files && el.files[0]) { handleImportFile(el.files[0]); return; }
   if (el.dataset.ch === 'filter') { const f = S.filters[S.view]; if (el.value) f[el.dataset.k] = el.value; else delete f[el.dataset.k]; loadList(S.view, { silent: true }); }
   else if (el.dataset.ch === 'dashfilter') { if (el.value) S.dashFilters[el.dataset.k] = el.value; else delete S.dashFilters[el.dataset.k]; delete S.dashFilters.offset; loadDashboard(); }
   else if (el.id === 'n-due') paintDraftPreview();
