@@ -1231,11 +1231,10 @@
 
       const allTasks = await tmFetchVisibleTasks_(access, scope);
       const today = tmDayKey_(new Date());
-      const matched = [];
-      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, All: 0 };
       const search = String(filters.search || '').trim().toLowerCase();
       const emp = String(filters.employee || '').trim().toLowerCase();
 
+      const preMatched = [];
       allTasks.forEach(t => {
         if (!tmCanSee_(access, t)) return;
         const mine = String(t.AssignedTo) === access.code;
@@ -1247,35 +1246,65 @@
           const e = byCode[String(t.AssignedTo)] || {};
           if (String(t.AssignedTo).toLowerCase() !== emp && String(e.EmpName || '').toLowerCase().indexOf(emp) < 0) return;
         }
-        if (search && (String(t.Title).toLowerCase() + ' ' + String(t.Description).toLowerCase()).indexOf(search) < 0) return;
-
         const due = t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '';
         if (filters.dueFrom && (!due || due < filters.dueFrom)) return;
         if (filters.dueTo && (!due || due > filters.dueTo)) return;
-
-        const over = t.Status !== 'Completed' && due && due < today;
-        counts.All++;
-        counts[t.Status] = (counts[t.Status] || 0) + 1;
-        if (over) counts.Overdue++;
-
-        if (filters.status && String(t.Status) !== filters.status) return;
-        if (filters.overdue === true || filters.overdue === 'true') { if (!over) return; }
-        matched.push(t);
+        preMatched.push(t);
       });
 
-      if (scope === 'team') {
-        matched.sort((x, y) => {
-          const xn = String((byCode[String(x.AssignedTo)] || {}).EmpName || x.AssignedTo);
-          const yn = String((byCode[String(y.AssignedTo)] || {}).EmpName || y.AssignedTo);
-          return xn.localeCompare(yn) || String(x.Title).localeCompare(String(y.Title)) || tmSortKey_(x).localeCompare(tmSortKey_(y));
-        });
-      } else {
-        matched.sort((x, y) => tmSortKey_(x).localeCompare(tmSortKey_(y)) || String(x.Title).localeCompare(String(y.Title)));
-      }
-
+      const counts = { Pending: 0, 'In Progress': 0, Completed: 0, Overdue: 0, All: 0 };
       const offset = Math.max(0, Number(filters.offset) || 0);
-      const page = matched.slice(offset, offset + PAGE_SIZE);
-      const shaped = await Promise.all(page.map(t => tmShapeTask_(t, access, byCode)));
+      let total = 0;
+      let shaped = [];
+
+      if (search) {
+        // Decrypt tasks before running keyword search so encrypted titles & descriptions are searchable
+        const shapedAll = await Promise.all(preMatched.map(t => tmShapeTask_(t, access, byCode)));
+        const searched = shapedAll.filter(t => {
+          const hay = (t.Title + ' ' + t.Description + ' ' + t.TaskID + ' ' + t.AssignedTo + ' ' + t.AssignedToName).toLowerCase();
+          return hay.indexOf(search) >= 0;
+        });
+        const matched = [];
+        searched.forEach(t => {
+          counts.All++;
+          counts[t.Status] = (counts[t.Status] || 0) + 1;
+          if (t.Overdue) counts.Overdue++;
+          if (filters.status && String(t.Status) !== filters.status) return;
+          if (filters.overdue === true || filters.overdue === 'true') { if (!t.Overdue) return; }
+          matched.push(t);
+        });
+        matched.sort((x, y) => scope === 'team'
+          ? (x.AssignedToName.localeCompare(y.AssignedToName) || x.Title.localeCompare(y.Title))
+          : ((x.Due || '9999').localeCompare(y.Due || '9999') || x.Title.localeCompare(y.Title)));
+        total = matched.length;
+        shaped = matched.slice(offset, offset + PAGE_SIZE);
+      } else {
+        const matched = [];
+        preMatched.forEach(t => {
+          const due = t.DueDate ? tmDayKey_(tmAsDate_(t.DueDate)) : '';
+          const over = t.Status !== 'Completed' && due && due < today;
+          counts.All++;
+          counts[t.Status] = (counts[t.Status] || 0) + 1;
+          if (over) counts.Overdue++;
+          if (filters.status && String(t.Status) !== filters.status) return;
+          if (filters.overdue === true || filters.overdue === 'true') { if (!over) return; }
+          matched.push(t);
+        });
+
+        if (scope === 'team') {
+          matched.sort((x, y) => {
+            const xn = String((byCode[String(x.AssignedTo)] || {}).EmpName || x.AssignedTo);
+            const yn = String((byCode[String(y.AssignedTo)] || {}).EmpName || y.AssignedTo);
+            return xn.localeCompare(yn) || String(x.Title).localeCompare(String(y.Title)) || tmSortKey_(x).localeCompare(tmSortKey_(y));
+          });
+        } else {
+          matched.sort((x, y) => tmSortKey_(x).localeCompare(tmSortKey_(y)) || String(x.Title).localeCompare(String(y.Title)));
+        }
+
+        total = matched.length;
+        const page = matched.slice(offset, offset + PAGE_SIZE);
+        shaped = await Promise.all(page.map(t => tmShapeTask_(t, access, byCode)));
+      }
 
       let ackTasks = [];
       if (scope === 'mine' && offset === 0) {
@@ -1289,9 +1318,9 @@
         ok: true,
         tasks: shaped,
         ackTasks,
-        total: matched.length,
+        total,
         counts,
-        hasMore: offset + PAGE_SIZE < matched.length,
+        hasMore: offset + PAGE_SIZE < total,
         nextOffset: offset + PAGE_SIZE
       };
     },
@@ -1312,10 +1341,11 @@
       const hier = await tmHierarchy_();
       const directory = hier.byCode;
       const now = new Date();
-      const isConfidential = !!data.confidential;
+      // Automatic End-to-End Encryption is enabled for all tasks by default
+      const isConfidential = data.confidential !== false;
 
       if (isConfidential && (!window.CryptoVault || !window.CryptoVault.isUnlocked(user.EmpCode))) {
-        throw new Error('Encryption vault is locked. Unlock your vault or sign in again to create confidential tasks.');
+        throw new Error('Encryption vault is locked. Sign in again (or unlock your vault once) to create encrypted tasks.');
       }
 
       const uniq = list => Array.from(new Set((Array.isArray(list) ? list : []).map(x => String(x).trim()).filter(Boolean)));
@@ -1394,6 +1424,7 @@
       if (specs.length > 200) throw new Error('A single save can create at most 200 tasks.');
 
       const targetKeyCache = {};
+      const missingKeyTargets = new Set();
       const taskRowsForMail = {};
       const taskIds = [];
       const taskWrites = [];
@@ -1411,6 +1442,10 @@
           if (!targetKeyCache[sp.target]) {
             const allowedCodes = await getAllowedKeyCodes_(sp.target, user.EmpCode, hier);
             const jwks = await fetchPublicKeys_(allowedCodes);
+            if (!jwks[user.EmpCode] && window.CryptoVault.getPublicJwk && window.CryptoVault.getPublicJwk()) {
+              jwks[user.EmpCode] = window.CryptoVault.getPublicJwk();
+            }
+            if (!jwks[sp.target]) missingKeyTargets.add(sp.target);
             targetKeyCache[sp.target] = { allowedCodes, jwks };
           }
           const { allowedCodes, jwks } = targetKeyCache[sp.target];
@@ -1511,7 +1546,15 @@
         mail = { recipients: mailTargets.length, queued, error: errMsg || undefined };
       }
 
-      const result = { ok: true, taskId: taskIds[0], taskIds, count: taskIds.length, recipients: recipients.length, mail };
+      const result = {
+        ok: true,
+        taskId: taskIds[0],
+        taskIds,
+        count: taskIds.length,
+        recipients: recipients.length,
+        mail,
+        missingKeyUsers: Array.from(missingKeyTargets)
+      };
       if (requestId) _CREATE_DEDUP[user.EmpCode + ':' + requestId] = result;
       return result;
     },
@@ -2152,7 +2195,95 @@
     // 13. Mail, Digests, & Reminder Schedules
     apiMailStatus: async function (token) {
       await tmAuth_(token);
-      return { ok: true, status: await tmMailStatus_() };
+      return { ok: true, status: await tmMailStatusSummary_() };
+    },
+
+    apiMailOverview: async function (token) {
+      const { user } = await tmAuth_(token);
+      const access = await tmAccess_(user);
+      const hier = await tmHierarchy_();
+      const isNazim = (hier.children[user.EmpCode] || []).length > 0;
+      if (!access.admin && !access.headOffice && !isNazim) {
+        throw new Error('Mail center access is limited to Nazim and Administrator accounts.');
+      }
+
+      const [mail, cfg, schedSnap] = await Promise.all([
+        tmMailStatusSummary_(),
+        tmConfig_(),
+        db.collection('reminderSchedule').get()
+      ]);
+
+      const schedule = [];
+      schedSnap.forEach(d => {
+        const s = d.data() || {};
+        schedule.push({
+          Role: String(s.Role || ''),
+          Region: String(s.Region || ''),
+          DayOfWeek: s.DayOfWeek === '' || s.DayOfWeek == null ? '' : Number(s.DayOfWeek),
+          DayOfMonth: s.DayOfMonth === '' || s.DayOfMonth == null ? '' : Number(s.DayOfMonth),
+          Active: tmYN_(s.Active)
+        });
+      });
+      schedule.sort((a, b) => (b.Active === 'Y') - (a.Active === 'Y') || a.Role.localeCompare(b.Role) || a.Region.localeCompare(b.Region));
+
+      const recentLogs = [];
+      try {
+        const logSnap = await db.collection('mailLog').limit(120).get();
+        logSnap.forEach(d => {
+          const x = d.data() || {};
+          const dt = tmAsDate_(x.Timestamp);
+          recentLogs.push({
+            ts: dt ? dt.getTime() : 0,
+            time: tmStamp_(x.Timestamp),
+            type: String(x.Type || ''),
+            toEmpCode: String(x.ToEmpCode || ''),
+            toEmail: String(x.ToEmail || ''),
+            subject: String(x.Subject || ''),
+            result: String(x.Result || ''),
+            error: String(x.Error || '')
+          });
+        });
+        recentLogs.sort((a, b) => b.ts - a.ts);
+      } catch (e) { /* ignore log read error */ }
+
+      const queueItems = [];
+      try {
+        const qSnap = access.admin
+          ? await db.collection('mailQueue').limit(100).get()
+          : await db.collection('mailQueue').where('ToEmpCode', '==', access.code).limit(50).get();
+        qSnap.forEach(d => {
+          const x = d.data() || {};
+          if (x.Status === 'SENT') return;
+          const dt = tmAsDate_(x.CreatedAt);
+          queueItems.push({
+            ts: dt ? dt.getTime() : 0,
+            time: tmStamp_(x.CreatedAt),
+            type: String(x.Type || ''),
+            toEmpCode: String(x.ToEmpCode || ''),
+            toEmail: String(x.ToEmail || ''),
+            subject: String(x.Subject || ''),
+            status: String(x.Status || 'QUEUED'),
+            attempts: Number(x.Attempts) || 0,
+            error: String(x.LastError || '')
+          });
+        });
+        queueItems.sort((a, b) => b.ts - a.ts);
+      } catch (e) { /* ignore queue read error */ }
+
+      return {
+        ok: true,
+        mail,
+        config: {
+          DAILY_RUN_HOUR: Number(cfg.DAILY_RUN_HOUR) || 9,
+          ESCALATION_ENABLED: tmYN_(cfg.ESCALATION_ENABLED),
+          EMAIL_GREETING: cfg.EMAIL_GREETING || TM_DEFAULTS.EMAIL_GREETING,
+          EMAIL_SIGN_OFF: cfg.EMAIL_SIGN_OFF || TM_DEFAULTS.EMAIL_SIGN_OFF,
+          relayConfigured: !!(window.EMAIL_CONFIG && window.EMAIL_CONFIG.appsScriptRelayUrl)
+        },
+        schedule,
+        recentLogs: recentLogs.slice(0, 40),
+        queueItems: queueItems.slice(0, 40)
+      };
     },
 
     apiSendTaskMail: async function (token, id) {
@@ -2381,7 +2512,7 @@
         }
       });
 
-      const mail = await tmMailStatus_();
+      const mail = await tmMailStatusSummary_();
       const appUrl = (typeof window !== 'undefined' && window.location) ? window.location.href.split('#')[0].split('?')[0] : '';
       return {
         ok: true,
@@ -2534,6 +2665,9 @@
       const roles = await tmRoles_();
       if (data.AuthUid) {
         await syncUserMapping_(data.AuthUid, data, roles, authEmail);
+      }
+      if ((isNew || !existing.AuthUid) && p.Password && window.CryptoVault && window.CryptoVault.provisionUserKey) {
+        await window.CryptoVault.provisionUserKey(db, code, p.Password).catch(() => {});
       }
 
       // If Nazim changed on an existing employee, update WatcherCodes on their open tasks
@@ -2887,7 +3021,7 @@
       // 3. Live Firestore Check
       if (includeLive) {
         await check('Live', 'Create, update, and clean up test task', async () => {
-          const r = await Backend.apiCreateTask(token, { title: 'TEST-SelfCheck', dueDate: tmDayKey_(new Date()), assignedTo: [user.EmpCode], description: 'Automated check' });
+          const r = await Backend.apiCreateTask(token, { title: 'TEST-SelfCheck', dueDate: tmDayKey_(new Date()), assignedTo: [user.EmpCode], description: 'Automated check', confidential: !!(window.CryptoVault && window.CryptoVault.isUnlocked(user.EmpCode)) });
           if (!r.ok || !r.taskId) throw new Error('Create failed');
           await Backend.apiUpdateTask(token, r.taskId, { status: 'Completed' });
           await db.collection('tasks').doc(r.taskId).delete();
