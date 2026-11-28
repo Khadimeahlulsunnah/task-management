@@ -56,14 +56,138 @@
   let _MEMO = {};
   let _TASK_CACHE = {};
   const TASK_CACHE_TTL_MS = 5 * 60 * 1000;
+  const TASK_SYNC_COOLDOWN_MS = 60 * 1000;
+  const SYNC_OVERLAP_MS = 2 * 60 * 1000;
+  const FULL_RECONCILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const RECENT_COMPLETED_DAYS = 30;
+  const DIR_LOCAL_TTL_MS = 5 * 60 * 1000;
+  const CACHE_IDB_NAME = 'tm_cache_v1';
+  const CACHE_IDB_STORE = 'kv';
   const _CREATE_DEDUP = {};
+
+  function openCacheDb_() {
+    return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') return reject(new Error('IndexedDB unavailable'));
+      const req = indexedDB.open(CACHE_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(CACHE_IDB_STORE)) d.createObjectStore(CACHE_IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('IndexedDB error'));
+    });
+  }
+
+  async function idbCacheGet_(key) {
+    try {
+      const d = await openCacheDb_();
+      return await new Promise(resolve => {
+        const tx = d.transaction(CACHE_IDB_STORE, 'readonly');
+        const req = tx.objectStore(CACHE_IDB_STORE).get(key);
+        req.onsuccess = () => { d.close(); resolve(req.result || null); };
+        req.onerror = () => { d.close(); resolve(null); };
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function idbCachePut_(key, val) {
+    try {
+      const d = await openCacheDb_();
+      await new Promise(resolve => {
+        const tx = d.transaction(CACHE_IDB_STORE, 'readwrite');
+        tx.objectStore(CACHE_IDB_STORE).put(val, key);
+        tx.oncomplete = () => { d.close(); resolve(); };
+        tx.onerror = () => { d.close(); resolve(); };
+      });
+    } catch (e) { /* Ignore storage quota / private mode issues */ }
+  }
+
+  async function idbCacheDelete_(key) {
+    try {
+      const d = await openCacheDb_();
+      await new Promise(resolve => {
+        const tx = d.transaction(CACHE_IDB_STORE, 'readwrite');
+        tx.objectStore(CACHE_IDB_STORE).delete(key);
+        tx.oncomplete = () => { d.close(); resolve(); };
+        tx.onerror = () => { d.close(); resolve(); };
+      });
+    } catch (e) { /* Ignore */ }
+  }
+
+  async function idbCacheClearAll_() {
+    try {
+      const d = await openCacheDb_();
+      await new Promise(resolve => {
+        const tx = d.transaction(CACHE_IDB_STORE, 'readwrite');
+        tx.objectStore(CACHE_IDB_STORE).clear();
+        tx.oncomplete = () => { d.close(); resolve(); };
+        tx.onerror = () => { d.close(); resolve(); };
+      });
+    } catch (e) { /* Ignore */ }
+  }
+
+  function tmSerializeVal_(v) {
+    if (v == null) return v;
+    if (v instanceof Date) return { __tmMs: v.getTime() };
+    if (typeof v.toDate === 'function') {
+      const d = v.toDate();
+      return d && !isNaN(d.getTime()) ? { __tmMs: d.getTime() } : null;
+    }
+    if (Array.isArray(v)) return v.map(tmSerializeVal_);
+    if (typeof v === 'object') {
+      const out = {};
+      Object.keys(v).forEach(k => { out[k] = tmSerializeVal_(v[k]); });
+      return out;
+    }
+    return v;
+  }
+
+  function tmDeserializeVal_(v) {
+    if (v == null) return v;
+    if (Array.isArray(v)) return v.map(tmDeserializeVal_);
+    if (typeof v === 'object') {
+      if (Object.prototype.hasOwnProperty.call(v, '__tmMs') && Object.keys(v).length === 1) {
+        return new Date(Number(v.__tmMs));
+      }
+      const out = {};
+      Object.keys(v).forEach(k => { out[k] = tmDeserializeVal_(v[k]); });
+      return out;
+    }
+    return v;
+  }
+
+  function tmServerTs_() {
+    return (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue && firebase.firestore.FieldValue.serverTimestamp)
+      ? firebase.firestore.FieldValue.serverTimestamp()
+      : new Date();
+  }
+
+  function tmPersistTaskEntry_(key, entry) {
+    if (!entry || !entry.tasksById) return;
+    const payload = {
+      scope: entry.scope,
+      code: entry.code,
+      lastSyncMs: entry.lastSyncMs || Date.now(),
+      lastFullActiveMs: entry.lastFullActiveMs || entry.lastSyncMs || Date.now(),
+      hasFullActive: !!entry.hasFullActive,
+      fetchedAtMs: entry.fetchedAt ? entry.fetchedAt.getTime() : Date.now(),
+      tasksById: tmSerializeVal_(entry.tasksById)
+    };
+    idbCachePut_('tasks:' + key, payload);
+  }
 
   function memoGet(key, fn) {
     if (!Object.prototype.hasOwnProperty.call(_MEMO, key)) _MEMO[key] = fn();
     return _MEMO[key];
   }
   function clearTaskCache_() { _TASK_CACHE = {}; }
-  function memoClear() { _MEMO = {}; clearTaskCache_(); }
+  function memoClear(opt) {
+    _MEMO = {};
+    clearTaskCache_();
+    if (opt && opt.clearDirIdb) idbCacheDelete_('dir_v1');
+  }
 
   function upsertTaskInCache_(rawTask) {
     if (!rawTask) return;
@@ -74,35 +198,62 @@
       const entry = _TASK_CACHE[key];
       if (!entry || !Array.isArray(entry.tasks)) return;
       const idx = entry.tasks.findIndex(x => String(x.TaskID || x.id) === id);
+      let changed = false;
       if (entry.scope === 'mine') {
         const isMine = String(normalized.AssignedTo || '') === entry.code;
         if (idx >= 0) {
           if (isMine) entry.tasks[idx] = normalized;
           else entry.tasks.splice(idx, 1);
+          changed = true;
         } else if (isMine) {
           entry.tasks.unshift(normalized);
+          changed = true;
+        }
+        if (entry.tasksById) {
+          if (isMine) entry.tasksById[id] = normalized;
+          else delete entry.tasksById[id];
         }
       } else if (entry.scope === 'team') {
         const visible = entry.access ? tmCanSee_(entry.access, normalized) : true;
         if (idx >= 0) {
           if (visible) entry.tasks[idx] = normalized;
           else entry.tasks.splice(idx, 1);
+          changed = true;
         } else if (visible) {
           entry.tasks.unshift(normalized);
+          changed = true;
+        }
+        if (entry.tasksById) {
+          if (visible) entry.tasksById[id] = normalized;
+          else delete entry.tasksById[id];
         }
       }
+      if (changed && entry.tasksById) tmPersistTaskEntry_(key, entry);
+    });
+  }
+
+  function removeTasksFromCache_(taskIds) {
+    const idSet = new Set((Array.isArray(taskIds) ? taskIds : []).map(x => String(x || '')).filter(Boolean));
+    if (!idSet.size) return;
+    Object.keys(_TASK_CACHE).forEach(key => {
+      const entry = _TASK_CACHE[key];
+      if (!entry || !Array.isArray(entry.tasks)) return;
+      const before = entry.tasks.length;
+      entry.tasks = entry.tasks.filter(x => !idSet.has(String(x.TaskID || x.id)));
+      if (entry.tasksById) idSet.forEach(id => { delete entry.tasksById[id]; });
+      if (entry.olderTasks) idSet.forEach(id => { delete entry.olderTasks[id]; });
+      if (entry.tasks.length !== before && entry.tasksById) tmPersistTaskEntry_(key, entry);
     });
   }
 
   function removeTaskFromCache_(taskId) {
-    const id = String(taskId || '');
-    if (!id) return;
-    Object.keys(_TASK_CACHE).forEach(key => {
-      const entry = _TASK_CACHE[key];
-      if (!entry || !Array.isArray(entry.tasks)) return;
-      entry.tasks = entry.tasks.filter(x => String(x.TaskID || x.id) !== id);
-    });
+    if (taskId) removeTasksFromCache_([taskId]);
   }
+
+  const SV_STORE_KEY = 'tm.sv';
+  function tmGetLocalSv_() { try { return typeof localStorage !== 'undefined' ? (localStorage.getItem(SV_STORE_KEY) || '') : ''; } catch (e) { return ''; } }
+  function tmSetLocalSv_(v) { try { if (typeof localStorage !== 'undefined' && v) localStorage.setItem(SV_STORE_KEY, String(v)); } catch (e) {} }
+  function tmClearLocalSv_() { try { if (typeof localStorage !== 'undefined') localStorage.removeItem(SV_STORE_KEY); } catch (e) {} }
 
   // ================= Firebase Initialization =================
   function initFirebase() {
@@ -273,7 +424,10 @@
         } else if (String(target) === String(access.code) && mineCache && (Date.now() - mineCache.ts) < TASK_CACHE_TTL_MS) {
           tasksForTarget = mineCache.tasks;
         } else {
-          const snap = await db.collection('tasks').where('AssignedTo', '==', String(target)).get();
+          const snap = await db.collection('tasks')
+            .where('AssignedTo', '==', String(target))
+            .where('Status', 'in', ['Pending', 'In Progress'])
+            .get();
           tasksForTarget = [];
           snap.forEach(d => tasksForTarget.push(Object.assign({ id: d.id }, d.data())));
         }
@@ -326,21 +480,26 @@
   }
 
   // ================= Config, Audit & Standard Roles =================
+  async function tmConfigLive_() {
+    if (!initFirebase()) return Object.assign({}, TM_DEFAULTS);
+    try {
+      const snap = await db.collection('config').doc('app_config').get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        const cfg = Object.assign({}, TM_DEFAULTS);
+        Object.keys(data).forEach(k => {
+          if (data[k] !== undefined && data[k] !== null && data[k] !== '') cfg[k] = data[k];
+        });
+        return cfg;
+      }
+    } catch (e) { /* use defaults */ }
+    return Object.assign({}, TM_DEFAULTS);
+  }
+
   async function tmConfig_() {
     return memoGet('config', async () => {
-      if (!initFirebase()) return Object.assign({}, TM_DEFAULTS);
-      try {
-        const snap = await db.collection('config').doc('app_config').get();
-        if (snap.exists) {
-          const data = snap.data() || {};
-          const cfg = Object.assign({}, TM_DEFAULTS);
-          Object.keys(data).forEach(k => {
-            if (data[k] !== undefined && data[k] !== null && data[k] !== '') cfg[k] = data[k];
-          });
-          return cfg;
-        }
-      } catch (e) { /* use defaults */ }
-      return Object.assign({}, TM_DEFAULTS);
+      const bundle = await tmLoadDirectoryBundle_();
+      return (bundle && bundle.config) ? bundle.config : tmConfigLive_();
     });
   }
 
@@ -433,11 +592,15 @@
     const hier = await tmHierarchy_();
     const emp = hier.byCode[String(profile.EmpCode)];
     if (!emp || emp.Active !== 'Y') throw new Error('This account is not active. Please contact your administrator.');
-    if (String(emp.SessionVersion || '1') !== String(profile.SessionVersion || '1')) {
+    const localSv = tmGetLocalSv_();
+    const liveSv = String(profile.SessionVersion || '1');
+    if (localSv && localSv !== liveSv) {
       await fbAuth.signOut().catch(() => {});
       if (window.CryptoVault) window.CryptoVault.clearSession();
+      tmClearLocalSv_();
       throw new Error('You were signed out. Please sign in again.');
     }
+    if (!localSv) tmSetLocalSv_(liveSv);
 
     if (window.CryptoVault) {
       await window.CryptoVault.restoreSession(emp.EmpCode);
@@ -445,70 +608,311 @@
     return { user: emp, profile, fbUser };
   }
 
-  // ================= Roles, Hierarchy & Exact Business Rules =================
+  // ================= Roles, Hierarchy & Compiled Directory Cache =================
+  function tmBuildHierarchyFromMap_(rawByCode) {
+    const byCode = {}, children = {};
+    Object.keys(rawByCode || {}).forEach(k => {
+      const e = rawByCode[k];
+      const c = String((e && e.EmpCode) || k || '').trim();
+      if (!c) return;
+      byCode[c] = {
+        EmpCode: c,
+        EmpName: String(e.EmpName || '').trim(),
+        Nazim: String(e.Nazim || '').trim(),
+        Division: String(e.Division || '').trim(),
+        State: String(e.State || '').trim(),
+        Region: String(e.Region || '').trim(),
+        Role: String(e.Role || '').trim(),
+        AppRole: tmNormAppRole_(e.AppRole),
+        Email: String(e.Email || '').trim(),
+        AuthEmail: String(e.AuthEmail || '').trim(),
+        AuthUid: String(e.AuthUid || '').trim(),
+        MustChangePassword: tmYN_(e.MustChangePassword),
+        Active: tmYN_(e.Active),
+        LastLogin: e.LastLogin || null,
+        SessionVersion: String(e.SessionVersion || '1')
+      };
+    });
+    const upperMap = {};
+    Object.keys(byCode).forEach(c => { upperMap[c.toUpperCase()] = c; });
+    Object.keys(byCode).forEach(c => {
+      const e = byCode[c];
+      const m = e.Nazim ? (byCode[e.Nazim] ? e.Nazim : (upperMap[e.Nazim.toUpperCase()] || '')) : '';
+      if (e.Active === 'Y' && m && byCode[m] && m !== c) {
+        (children[m] = children[m] || []).push(c);
+      }
+    });
+    return { byCode, children };
+  }
+
+  async function tmRolesLive_() {
+    if (!initFirebase()) return [];
+    const snap = await db.collection('roles').get();
+    const roles = [];
+    snap.forEach(d => {
+      const r = d.data() || {};
+      roles.push({
+        Role: String(r.Role || d.id || '').trim(),
+        ParentRole: String(r.ParentRole || '').trim(),
+        Level: Number(r.Level) || 0,
+        Chain: String(r.Chain || ''),
+        IsHeadOffice: tmYes_(r.IsHeadOffice),
+        IsAdmin: tmYes_(r.IsAdmin),
+        Active: tmYes_(r.Active)
+      });
+    });
+    return roles.filter(r => r.Role).sort((a, b) => (a.Level || 999) - (b.Level || 999) || a.Role.localeCompare(b.Role));
+  }
+
+  async function tmRegionsLive_() {
+    if (!initFirebase()) return [];
+    const snap = await db.collection('regions').get();
+    const list = [];
+    snap.forEach(d => {
+      const r = d.data() || {};
+      const name = String(r.Region || d.id || '').trim();
+      if (name) list.push({ id: d.id, Region: name, Country: String(r.Country || 'India'), Active: tmYes_(r.Active) });
+    });
+    return list.sort((a, b) => a.Region.localeCompare(b.Region));
+  }
+
+  async function tmStatesLive_() {
+    if (!initFirebase()) return [];
+    const snap = await db.collection('states').get();
+    const list = [];
+    snap.forEach(d => {
+      const s = d.data() || {};
+      const name = String(s.State || '').trim();
+      const region = String(s.Region || '').trim();
+      if (name && region) list.push({ id: d.id, State: name, Region: region, Active: tmYes_(s.Active) });
+    });
+    return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State));
+  }
+
+  async function tmDivisionsLive_() {
+    if (!initFirebase()) return [];
+    const snap = await db.collection('divisions').get();
+    const list = [];
+    snap.forEach(d => {
+      const v = d.data() || {};
+      const name = String(v.Division || '').trim();
+      const state = String(v.State || '').trim();
+      const region = String(v.Region || '').trim();
+      if (name && state && region) list.push({ id: d.id, Division: name, State: state, Region: region, Active: tmYes_(v.Active) });
+    });
+    return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State) || a.Division.localeCompare(b.Division));
+  }
+
+  async function tmHierarchyLive_() {
+    if (!initFirebase()) return { byCode: {}, children: {} };
+    const snap = await db.collection('employees').get();
+    const raw = {};
+    snap.forEach(d => {
+      const e = d.data() || {};
+      const c = String(e.EmpCode || '').trim();
+      if (c) raw[c] = e;
+    });
+    return tmBuildHierarchyFromMap_(raw);
+  }
+
+  async function tmRebuildDirectoryDoc_() {
+    if (!initFirebase()) return null;
+    try {
+      const [hier, roles, regions, states, divisions, config] = await Promise.all([
+        tmHierarchyLive_(),
+        tmRolesLive_(),
+        tmRegionsLive_(),
+        tmStatesLive_(),
+        tmDivisionsLive_(),
+        tmConfigLive_()
+      ]);
+      const compactEmps = {};
+      Object.keys(hier.byCode).forEach(c => {
+        const e = hier.byCode[c];
+        compactEmps[c] = {
+          EmpCode: e.EmpCode,
+          EmpName: e.EmpName,
+          Nazim: e.Nazim,
+          Division: e.Division,
+          State: e.State,
+          Region: e.Region,
+          Role: e.Role,
+          AppRole: e.AppRole,
+          Email: e.Email,
+          MustChangePassword: e.MustChangePassword,
+          Active: e.Active,
+          SessionVersion: e.SessionVersion
+        };
+      });
+      const version = String(Date.now());
+      const docPayload = {
+        version,
+        updatedAt: new Date(),
+        employees: compactEmps,
+        roles,
+        regions,
+        states,
+        divisions,
+        config
+      };
+      await db.collection('meta').doc('directory').set(docPayload);
+      const bundle = {
+        version,
+        savedAt: Date.now(),
+        source: 'compiled',
+        hierarchy: hier,
+        roles,
+        regions,
+        states,
+        divisions,
+        config
+      };
+      _MEMO['dirBundle'] = bundle;
+      _MEMO['hierarchy'] = hier;
+      _MEMO['roles'] = roles;
+      _MEMO['regions'] = regions;
+      _MEMO['states'] = states;
+      _MEMO['divisions'] = divisions;
+      _MEMO['config'] = config;
+      await idbCachePut_('dir_v1', {
+        version,
+        savedAt: bundle.savedAt,
+        employees: compactEmps,
+        roles,
+        regions,
+        states,
+        divisions,
+        config
+      });
+      return bundle;
+    } catch (e) {
+      console.warn('Directory cache rebuild skipped:', e && e.message ? e.message : e);
+      return null;
+    }
+  }
+
+  async function tmLoadDirectoryBundle_(forceLive) {
+    if (!initFirebase()) {
+      return { hierarchy: { byCode: {}, children: {} }, roles: [], regions: [], states: [], divisions: [], config: Object.assign({}, TM_DEFAULTS), source: 'none' };
+    }
+    if (!forceLive && _MEMO['dirBundle']) return _MEMO['dirBundle'];
+
+    if (!forceLive) {
+      const idbRec = await idbCacheGet_('dir_v1');
+      if (idbRec && idbRec.employees && (Date.now() - (idbRec.savedAt || 0)) < DIR_LOCAL_TTL_MS) {
+        const bundle = {
+          version: String(idbRec.version || ''),
+          savedAt: idbRec.savedAt,
+          source: 'indexeddb',
+          hierarchy: tmBuildHierarchyFromMap_(idbRec.employees),
+          roles: idbRec.roles || [],
+          regions: idbRec.regions || [],
+          states: idbRec.states || [],
+          divisions: idbRec.divisions || [],
+          config: Object.assign({}, TM_DEFAULTS, idbRec.config || {})
+        };
+        _MEMO['dirBundle'] = bundle;
+        return bundle;
+      }
+
+      try {
+        const snap = await db.collection('meta').doc('directory').get();
+        if (snap.exists && snap.data() && snap.data().employees) {
+          const d = snap.data();
+          const bundle = {
+            version: String(d.version || ''),
+            savedAt: Date.now(),
+            source: 'compiled',
+            hierarchy: tmBuildHierarchyFromMap_(d.employees),
+            roles: d.roles || [],
+            regions: d.regions || [],
+            states: d.states || [],
+            divisions: d.divisions || [],
+            config: Object.assign({}, TM_DEFAULTS, d.config || {})
+          };
+          _MEMO['dirBundle'] = bundle;
+          await idbCachePut_('dir_v1', {
+            version: bundle.version,
+            savedAt: bundle.savedAt,
+            employees: d.employees,
+            roles: bundle.roles,
+            regions: bundle.regions,
+            states: bundle.states,
+            divisions: bundle.divisions,
+            config: bundle.config
+          });
+          return bundle;
+        }
+      } catch (e) { /* Fall back to live collection reads */ }
+    }
+
+    const [hierarchy, roles, regions, states, divisions, config] = await Promise.all([
+      tmHierarchyLive_(),
+      tmRolesLive_(),
+      tmRegionsLive_(),
+      tmStatesLive_(),
+      tmDivisionsLive_(),
+      tmConfigLive_()
+    ]);
+    const compactEmps = {};
+    Object.keys(hierarchy.byCode).forEach(c => {
+      const e = hierarchy.byCode[c];
+      compactEmps[c] = {
+        EmpCode: e.EmpCode, EmpName: e.EmpName, Nazim: e.Nazim, Division: e.Division,
+        State: e.State, Region: e.Region, Role: e.Role, AppRole: e.AppRole,
+        Email: e.Email, MustChangePassword: e.MustChangePassword, Active: e.Active, SessionVersion: e.SessionVersion
+      };
+    });
+    const bundle = {
+      version: String(Date.now()),
+      savedAt: Date.now(),
+      source: 'live',
+      hierarchy,
+      roles,
+      regions,
+      states,
+      divisions,
+      config
+    };
+    _MEMO['dirBundle'] = bundle;
+    await idbCachePut_('dir_v1', {
+      version: bundle.version,
+      savedAt: bundle.savedAt,
+      employees: compactEmps,
+      roles,
+      regions,
+      states,
+      divisions,
+      config
+    });
+    return bundle;
+  }
+
   async function tmRoles_() {
     return memoGet('roles', async () => {
-      if (!initFirebase()) return [];
-      const snap = await db.collection('roles').get();
-      const roles = [];
-      snap.forEach(d => {
-        const r = d.data() || {};
-        roles.push({
-          Role: String(r.Role || d.id || '').trim(),
-          ParentRole: String(r.ParentRole || '').trim(),
-          Level: Number(r.Level) || 0,
-          Chain: String(r.Chain || ''),
-          IsHeadOffice: tmYes_(r.IsHeadOffice),
-          IsAdmin: tmYes_(r.IsAdmin),
-          Active: tmYes_(r.Active)
-        });
-      });
-      return roles.filter(r => r.Role).sort((a, b) => (a.Level || 999) - (b.Level || 999) || a.Role.localeCompare(b.Role));
+      const bundle = await tmLoadDirectoryBundle_();
+      return bundle.roles || [];
     });
   }
 
   async function tmRegions_() {
     return memoGet('regions', async () => {
-      if (!initFirebase()) return [];
-      const snap = await db.collection('regions').get();
-      const list = [];
-      snap.forEach(d => {
-        const r = d.data() || {};
-        const name = String(r.Region || d.id || '').trim();
-        if (name) list.push({ id: d.id, Region: name, Country: String(r.Country || 'India'), Active: tmYes_(r.Active) });
-      });
-      return list.sort((a, b) => a.Region.localeCompare(b.Region));
+      const bundle = await tmLoadDirectoryBundle_();
+      return bundle.regions || [];
     });
   }
 
   async function tmStates_() {
     return memoGet('states', async () => {
-      if (!initFirebase()) return [];
-      const snap = await db.collection('states').get();
-      const list = [];
-      snap.forEach(d => {
-        const s = d.data() || {};
-        const name = String(s.State || '').trim();
-        const region = String(s.Region || '').trim();
-        if (name && region) list.push({ id: d.id, State: name, Region: region, Active: tmYes_(s.Active) });
-      });
-      return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State));
+      const bundle = await tmLoadDirectoryBundle_();
+      return bundle.states || [];
     });
   }
 
   async function tmDivisions_() {
     return memoGet('divisions', async () => {
-      if (!initFirebase()) return [];
-      const snap = await db.collection('divisions').get();
-      const list = [];
-      snap.forEach(d => {
-        const v = d.data() || {};
-        const name = String(v.Division || '').trim();
-        const state = String(v.State || '').trim();
-        const region = String(v.Region || '').trim();
-        if (name && state && region) list.push({ id: d.id, Division: name, State: state, Region: region, Active: tmYes_(v.Active) });
-      });
-      return list.sort((a, b) => a.Region.localeCompare(b.Region) || a.State.localeCompare(b.State) || a.Division.localeCompare(b.Division));
+      const bundle = await tmLoadDirectoryBundle_();
+      return bundle.divisions || [];
     });
   }
 
@@ -541,41 +945,8 @@
 
   async function tmHierarchy_() {
     return memoGet('hierarchy', async () => {
-      if (!initFirebase()) return { byCode: {}, children: {} };
-      const snap = await db.collection('employees').get();
-      const byCode = {}, children = {};
-      snap.forEach(d => {
-        const e = d.data();
-        const c = String(e.EmpCode || '').trim();
-        if (!c) return;
-        byCode[c] = {
-          EmpCode: c,
-          EmpName: String(e.EmpName || '').trim(),
-          Nazim: String(e.Nazim || '').trim(),
-          Division: String(e.Division || '').trim(),
-          State: String(e.State || '').trim(),
-          Region: String(e.Region || '').trim(),
-          Role: String(e.Role || '').trim(),
-          AppRole: tmNormAppRole_(e.AppRole),
-          Email: String(e.Email || '').trim(),
-          AuthEmail: String(e.AuthEmail || '').trim(),
-          AuthUid: String(e.AuthUid || '').trim(),
-          MustChangePassword: tmYN_(e.MustChangePassword),
-          Active: tmYN_(e.Active),
-          LastLogin: e.LastLogin || null,
-          SessionVersion: String(e.SessionVersion || '1')
-        };
-      });
-      const upperMap = {};
-      Object.keys(byCode).forEach(c => { upperMap[c.toUpperCase()] = c; });
-      Object.keys(byCode).forEach(c => {
-        const e = byCode[c];
-        const m = e.Nazim ? (byCode[e.Nazim] ? e.Nazim : (upperMap[e.Nazim.toUpperCase()] || '')) : '';
-        if (e.Active === 'Y' && m && byCode[m] && m !== c) {
-          (children[m] = children[m] || []).push(c);
-        }
-      });
-      return { byCode, children };
+      const bundle = await tmLoadDirectoryBundle_();
+      return bundle.hierarchy || { byCode: {}, children: {} };
     });
   }
 
@@ -921,56 +1292,269 @@
     };
   }
 
-  // ================= Task Fetching Helper =================
+  // ================= Task Fetching Helper (IndexedDB + Delta Sync + Open/Completed Split) =================
+  function tmIsIndexError_(err) {
+    if (!err) return false;
+    const code = String(err.code || '').toLowerCase();
+    const msg = String(err.message || '');
+    return code === 'failed-precondition' || /requires an index|index/i.test(msg);
+  }
+
+  async function tmRunQueryWithFallback_(primaryFn, fallbackFn) {
+    try {
+      return await primaryFn();
+    } catch (err) {
+      if (fallbackFn && tmIsIndexError_(err)) {
+        console.warn('Firestore composite index pending; using fallback query:', err && err.message ? err.message : err);
+        return await fallbackFn();
+      }
+      throw err;
+    }
+  }
+
+  function tmScopeDescriptors_(access, scope) {
+    if (scope === 'mine') {
+      return [{
+        key: 'mine',
+        isArr: false,
+        applyBase: ref => ref.where('AssignedTo', '==', access.code)
+      }];
+    }
+    if (access.admin || access.headOffice) {
+      return [{
+        key: 'all',
+        isArr: false,
+        applyBase: ref => ref
+      }];
+    }
+    const list = [
+      { key: 'watcher', isArr: true, applyBase: ref => ref.where('WatcherCodes', 'array-contains', access.code) },
+      { key: 'assignedTo', isArr: false, applyBase: ref => ref.where('AssignedTo', '==', access.code) },
+      { key: 'assignedBy', isArr: false, applyBase: ref => ref.where('AssignedBy', '==', access.code) }
+    ];
+    if (access.appRole === 'Region Admin' && access.region) {
+      list.push({ key: 'region', isArr: false, applyBase: ref => ref.where('Region', '==', access.region) });
+    } else if (access.appRole === 'State Admin' && access.region && access.state) {
+      list.push({ key: 'state', isArr: false, applyBase: ref => ref.where('Region', '==', access.region).where('State', '==', access.state) });
+    } else if (access.appRole === 'Division Admin' && access.region && access.state && access.division) {
+      list.push({ key: 'division', isArr: false, applyBase: ref => ref.where('Region', '==', access.region).where('State', '==', access.state).where('Division', '==', access.division) });
+    }
+    return list;
+  }
+
+  function tmMaxUpdatedMs_(tasks) {
+    let maxMs = 0;
+    (tasks || []).forEach(t => {
+      const d = tmAsDate_(t.UpdatedAt) || tmAsDate_(t.CreatedAt);
+      if (d && d.getTime() > maxMs) maxMs = d.getTime();
+    });
+    return maxMs || Date.now();
+  }
+
+  async function tmFetchActiveSet_(access, scope) {
+    const cutoff30d = new Date(Date.now() - RECENT_COMPLETED_DAYS * 86400000);
+    const descs = tmScopeDescriptors_(access, scope);
+    const tasksCol = db.collection('tasks');
+    const taskMap = {};
+
+    const snaps = await Promise.all(descs.map(async desc => {
+      const runOpen = async () => {
+        if (desc.isArr) {
+          // Firestore cannot combine array-contains with 'in' / '!=', so query Pending + In Progress cleanly
+          return Promise.all([
+            tmRunQueryWithFallback_(
+              () => desc.applyBase(tasksCol).where('Status', '==', 'Pending').get(),
+              () => desc.applyBase(tasksCol).get()
+            ),
+            tmRunQueryWithFallback_(
+              () => desc.applyBase(tasksCol).where('Status', '==', 'In Progress').get(),
+              () => Promise.resolve({ forEach: () => {} })
+            )
+          ]);
+        }
+        return [await tmRunQueryWithFallback_(
+          () => desc.applyBase(tasksCol).where('Status', 'in', ['Pending', 'In Progress']).get(),
+          () => desc.applyBase(tasksCol).get()
+        )];
+      };
+
+      const runRecentDone = async () => {
+        return tmRunQueryWithFallback_(
+          () => desc.applyBase(tasksCol).where('Status', '==', 'Completed').where('CompletedAt', '>=', cutoff30d).get(),
+          () => desc.applyBase(tasksCol).where('Status', '==', 'Completed').get()
+        );
+      };
+
+      const [openSnaps, doneSnap] = await Promise.all([runOpen(), runRecentDone()]);
+      return openSnaps.concat([doneSnap]);
+    }));
+
+    snaps.forEach(group => group.forEach(s => s.forEach(d => {
+      const data = Object.assign({ id: d.id }, d.data());
+      if (data.Status === 'Completed') {
+        const comp = tmAsDate_(data.CompletedAt) || tmAsDate_(data.UpdatedAt);
+        if (comp && comp.getTime() < cutoff30d.getTime()) return;
+      }
+      taskMap[d.id] = data;
+    })));
+
+    return taskMap;
+  }
+
+  async function tmFetchDeltaSince_(access, scope, sinceMs) {
+    const sinceDate = new Date(Math.max(0, Number(sinceMs || 0) - SYNC_OVERLAP_MS));
+    const descs = tmScopeDescriptors_(access, scope);
+    const tasksCol = db.collection('tasks');
+    const histCol = db.collection('taskHistory');
+
+    const deltaSnaps = await Promise.all(descs.map(desc =>
+      tmRunQueryWithFallback_(
+        () => desc.applyBase(tasksCol).where('UpdatedAt', '>', sinceDate).get(),
+        () => desc.applyBase(tasksCol).get()
+      )
+    ));
+
+    const delSnapPromise = (access.admin || access.headOffice)
+      ? tmRunQueryWithFallback_(
+          () => histCol.where('Action', '==', 'TASK_DELETED').where('Timestamp', '>', sinceDate).get(),
+          () => histCol.where('Timestamp', '>', sinceDate).get()
+        )
+      : tmRunQueryWithFallback_(
+          () => histCol.where('WatcherCodes', 'array-contains', access.code).where('Action', '==', 'TASK_DELETED').where('Timestamp', '>', sinceDate).get(),
+          () => histCol.where('WatcherCodes', 'array-contains', access.code).where('Timestamp', '>', sinceDate).get()
+        );
+
+    const delSnap = await delSnapPromise;
+    const upserts = [];
+    const seenIds = new Set();
+    deltaSnaps.forEach(s => s.forEach(d => {
+      if (seenIds.has(d.id)) return;
+      seenIds.add(d.id);
+      upserts.push(Object.assign({ id: d.id }, d.data()));
+    }));
+
+    const deletedIds = new Set();
+    delSnap.forEach(d => {
+      const ev = d.data() || {};
+      if (ev.Action === 'TASK_DELETED' && ev.TaskID) deletedIds.add(String(ev.TaskID));
+    });
+
+    return { upserts, deletedIds };
+  }
+
+  function tmCombineEntryTasks_(entry) {
+    const map = Object.assign({}, entry.olderTasks || {}, entry.tasksById || {});
+    return Object.values(map);
+  }
+
   async function tmGetVisibleTasks_(access, scope, opt) {
     const sc = scope === 'team' ? 'team' : 'mine';
     const key = access.code + ':' + sc;
     const force = !!(opt && opt.forceRefresh);
-    const cached = _TASK_CACHE[key];
-    if (!force && cached && (Date.now() - cached.ts) < TASK_CACHE_TTL_MS) {
-      return { tasks: cached.tasks, fromCache: true, fetchedAt: cached.fetchedAt };
-    }
-
-    const taskMap = {};
-    if (sc === 'mine') {
-      const snap = await db.collection('tasks').where('AssignedTo', '==', access.code).get();
-      snap.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); });
-    } else if (access.admin || access.headOffice) {
-      const snap = await db.collection('tasks').get();
-      snap.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); });
-    } else {
-      const queries = [
-        db.collection('tasks').where('WatcherCodes', 'array-contains', access.code).get(),
-        db.collection('tasks').where('AssignedTo', '==', access.code).get(),
-        db.collection('tasks').where('AssignedBy', '==', access.code).get()
-      ];
-      if (access.appRole === 'Region Admin' && access.region) {
-        queries.push(db.collection('tasks').where('Region', '==', access.region).get());
-      } else if (access.appRole === 'State Admin' && access.region && access.state) {
-        queries.push(db.collection('tasks').where('Region', '==', access.region).where('State', '==', access.state).get());
-      } else if (access.appRole === 'Division Admin' && access.region && access.state && access.division) {
-        queries.push(db.collection('tasks').where('Region', '==', access.region).where('State', '==', access.state).where('Division', '==', access.division).get());
-      }
-      const snaps = await Promise.all(queries);
-      snaps.forEach(s => s.forEach(d => { taskMap[d.id] = Object.assign({ id: d.id }, d.data()); }));
-    }
-
-    const tasks = Object.values(taskMap);
+    const fullReconcile = !!(opt && opt.fullReconcile);
     const nowMs = Date.now();
+
+    let entry = _TASK_CACHE[key];
+    if (!entry) {
+      const idbRec = await idbCacheGet_('tasks:' + key);
+      if (idbRec && idbRec.tasksById) {
+        const tasksById = tmDeserializeVal_(idbRec.tasksById);
+        entry = {
+          ts: 0,
+          lastCheckedMs: 0,
+          lastSyncMs: Number(idbRec.lastSyncMs) || 0,
+          lastFullActiveMs: Number(idbRec.lastFullActiveMs) || 0,
+          hasFullActive: !!idbRec.hasFullActive,
+          fetchedAt: new Date(Number(idbRec.fetchedAtMs) || nowMs),
+          tasksById,
+          olderTasks: {},
+          tasks: Object.values(tasksById),
+          scope: sc,
+          code: access.code,
+          access
+        };
+        _TASK_CACHE[key] = entry;
+      }
+    }
+
+    if (!force && !fullReconcile && entry && entry.hasFullActive && (nowMs - (entry.lastCheckedMs || 0)) < TASK_SYNC_COOLDOWN_MS) {
+      return { tasks: entry.tasks, fromCache: true, syncMode: 'cache', fetchedAt: entry.fetchedAt };
+    }
+
+    let syncMode = 'active';
+    let tasksById;
+    let lastSyncMs;
+    let lastFullActiveMs;
+
+    if (!fullReconcile && entry && entry.hasFullActive && entry.lastSyncMs && (nowMs - (entry.lastFullActiveMs || 0)) < FULL_RECONCILE_MAX_AGE_MS) {
+      const delta = await tmFetchDeltaSince_(access, sc, entry.lastSyncMs);
+      tasksById = Object.assign({}, entry.tasksById);
+      delta.deletedIds.forEach(id => {
+        delete tasksById[id];
+        if (entry.olderTasks) delete entry.olderTasks[id];
+      });
+      delta.upserts.forEach(t => {
+        const id = String(t.TaskID || t.id);
+        const visible = sc === 'mine' ? String(t.AssignedTo) === access.code : tmCanSee_(access, t);
+        if (visible) tasksById[id] = t;
+        else delete tasksById[id];
+      });
+      lastSyncMs = Math.max(entry.lastSyncMs, tmMaxUpdatedMs_(delta.upserts), nowMs - 1000);
+      lastFullActiveMs = entry.lastFullActiveMs;
+      syncMode = 'delta';
+    } else {
+      tasksById = await tmFetchActiveSet_(access, sc);
+      lastSyncMs = Math.max(tmMaxUpdatedMs_(Object.values(tasksById)), nowMs - 1000);
+      lastFullActiveMs = nowMs;
+      syncMode = 'active';
+    }
+
     const fetchedAt = new Date(nowMs);
-    _TASK_CACHE[key] = { ts: nowMs, fetchedAt, tasks, scope: sc, code: access.code, access };
+    const nextEntry = {
+      ts: nowMs,
+      lastCheckedMs: nowMs,
+      lastSyncMs,
+      lastFullActiveMs,
+      hasFullActive: true,
+      fetchedAt,
+      tasksById,
+      olderTasks: (entry && entry.olderTasks) || {},
+      tasks: [],
+      scope: sc,
+      code: access.code,
+      access
+    };
+    nextEntry.tasks = tmCombineEntryTasks_(nextEntry);
+    _TASK_CACHE[key] = nextEntry;
+    tmPersistTaskEntry_(key, nextEntry);
+
     // Team fetch already includes tasks assigned to the caller, so prime 'mine' cache at 0 extra reads.
     if (sc === 'team') {
-      _TASK_CACHE[access.code + ':mine'] = {
+      const mineById = {};
+      Object.keys(tasksById).forEach(id => {
+        if (String(tasksById[id].AssignedTo) === access.code) mineById[id] = tasksById[id];
+      });
+      const prevMine = _TASK_CACHE[access.code + ':mine'];
+      const mineEntry = {
         ts: nowMs,
+        lastCheckedMs: nowMs,
+        lastSyncMs,
+        lastFullActiveMs,
+        hasFullActive: true,
         fetchedAt,
-        tasks: tasks.filter(t => String(t.AssignedTo) === access.code),
+        tasksById: mineById,
+        olderTasks: (prevMine && prevMine.olderTasks) || {},
+        tasks: [],
         scope: 'mine',
         code: access.code,
         access
       };
+      mineEntry.tasks = tmCombineEntryTasks_(mineEntry);
+      _TASK_CACHE[access.code + ':mine'] = mineEntry;
+      tmPersistTaskEntry_(access.code + ':mine', mineEntry);
     }
-    return { tasks, fromCache: false, fetchedAt };
+
+    return { tasks: nextEntry.tasks, fromCache: false, syncMode, fetchedAt };
   }
 
   async function tmFetchVisibleTasks_(access, scope, opt) {
@@ -1103,10 +1687,12 @@
     const ids = Array.from(new Set([].concat(taskIds).join(',').split(',').filter(Boolean)));
     if (!ids.length) return;
     const now = new Date();
+    const srvTs = tmServerTs_();
     await Promise.all(ids.map(async id => {
       try {
         await db.collection('tasks').doc(id).update({
           LastReminderAt: now,
+          UpdatedAt: srvTs,
           ReminderCount: firebase.firestore.FieldValue.increment(1)
         });
       } catch (e) { /* ignore deleted tasks */ }
@@ -1378,7 +1964,9 @@
 
       await db.collection('employees').doc(empCode).update({ LastLogin: new Date() }).catch(() => {});
       await tmAudit_(empCode, 'LOGIN', '', {});
+      tmSetLocalSv_(String(userSnap.data().SessionVersion || '1'));
       memoClear();
+      await idbCacheDelete_('dir_v1');
       const token = 'fb:' + fbUser.uid;
       const boot = await Backend.apiBootstrap(token);
       return Object.assign({ ok: true, token }, boot);
@@ -1460,6 +2048,9 @@
 
       out.mine = await Backend.apiListTasks(token, { scope: 'mine', forceRefresh: true });
       out.team = null;
+      if (isAdmin && _MEMO['dirBundle'] && _MEMO['dirBundle'].source === 'live') {
+        tmRebuildDirectoryDoc_().catch(() => {});
+      }
       return out;
     },
 
@@ -1486,7 +2077,8 @@
         throw new Error('Team task access is limited to Nazim and Area Admin users.');
       }
 
-      const allTasks = await tmFetchVisibleTasks_(access, scope, { forceRefresh: !!filters.forceRefresh });
+      const taskRes = await tmGetVisibleTasks_(access, scope, { forceRefresh: !!filters.forceRefresh });
+      const allTasks = taskRes.tasks;
       const today = tmDayKey_(new Date());
       const search = String(filters.search || '').trim().toLowerCase();
       const emp = String(filters.employee || '').trim().toLowerCase();
@@ -1588,8 +2180,90 @@
         ackTasks,
         total,
         counts,
+        recentDays: RECENT_COMPLETED_DAYS,
+        syncMode: taskRes.syncMode || 'active',
         hasMore: offset + PAGE_SIZE < total,
         nextOffset: offset + PAGE_SIZE
+      };
+    },
+
+    // 3b. Load Older Completed Tasks (>30 days) On-Demand
+    apiListOlderCompleted: async function (token, filters) {
+      const { user } = await tmAuth_(token);
+      filters = filters || {};
+      const access = await tmAccess_(user);
+      const hier = await tmHierarchy_();
+      const scope = filters.scope === 'team' ? 'team' : 'mine';
+      if (scope === 'team' && !access.admin && !access.headOffice && !access.areaAdmin && (hier.children[user.EmpCode] || []).length === 0) {
+        throw new Error('Team task access is limited to Nazim and Area Admin users.');
+      }
+
+      const defaultBeforeMs = Date.now() - RECENT_COMPLETED_DAYS * 86400000;
+      const beforeMs = Number(filters.beforeMs) > 0 ? Number(filters.beforeMs) : defaultBeforeMs;
+      const beforeDate = new Date(beforeMs);
+      const excludeSet = new Set(Array.isArray(filters.excludeIds) ? filters.excludeIds.map(String) : []);
+      const useLe = excludeSet.size > 0;
+      const fetchLimit = scope === 'team' ? PAGE_SIZE * 2 : PAGE_SIZE + excludeSet.size;
+      const descs = tmScopeDescriptors_(access, scope);
+      const tasksCol = db.collection('tasks');
+
+      const snaps = await Promise.all(descs.map(desc =>
+        tmRunQueryWithFallback_(
+          () => desc.applyBase(tasksCol).where('Status', '==', 'Completed').where('CompletedAt', useLe ? '<=' : '<', beforeDate).orderBy('CompletedAt', 'desc').limit(fetchLimit).get(),
+          () => desc.applyBase(tasksCol).where('Status', '==', 'Completed').get()
+        )
+      ));
+
+      let anyHitLimit = false;
+      const rawMap = {};
+      snaps.forEach(s => {
+        if (s.size >= fetchLimit) anyHitLimit = true;
+        s.forEach(d => {
+          if (excludeSet.has(String(d.id))) return;
+          const t = Object.assign({ id: d.id }, d.data());
+          if (t.Status !== 'Completed') return;
+          if (excludeSet.has(String(t.TaskID || d.id))) return;
+          const comp = tmAsDate_(t.CompletedAt) || tmAsDate_(t.UpdatedAt);
+          if (comp) {
+            const cm = comp.getTime();
+            if (useLe ? (cm > beforeMs) : (cm >= beforeMs)) return;
+          }
+          if (!tmCanSee_(access, t)) return;
+          const mine = String(t.AssignedTo) === access.code;
+          if (scope === 'mine' ? !mine : mine) return;
+          rawMap[d.id] = t;
+        });
+      });
+
+      const sorted = Object.values(rawMap).sort((a, b) => {
+        const am = (tmAsDate_(a.CompletedAt) || tmAsDate_(a.UpdatedAt) || new Date(0)).getTime();
+        const bm = (tmAsDate_(b.CompletedAt) || tmAsDate_(b.UpdatedAt) || new Date(0)).getTime();
+        return bm - am;
+      });
+      const page = sorted.slice(0, PAGE_SIZE);
+      const key = access.code + ':' + scope;
+      const entry = _TASK_CACHE[key];
+      if (entry) {
+        entry.olderTasks = entry.olderTasks || {};
+        page.forEach(t => {
+          const id = String(t.TaskID || t.id);
+          if (!entry.tasksById[id]) entry.olderTasks[id] = t;
+        });
+        entry.tasks = tmCombineEntryTasks_(entry);
+      }
+      const shaped = await Promise.all(page.map(t => tmShapeTask_(t, access, hier.byCode)));
+      const lastDoc = page[page.length - 1];
+      const lastMs = lastDoc ? (tmAsDate_(lastDoc.CompletedAt) || tmAsDate_(lastDoc.UpdatedAt) || new Date(beforeMs)).getTime() : beforeMs;
+      const nextExcludeIds = page
+        .filter(t => (tmAsDate_(t.CompletedAt) || tmAsDate_(t.UpdatedAt) || new Date(0)).getTime() === lastMs)
+        .map(t => String(t.TaskID || t.id));
+      return {
+        ok: true,
+        tasks: shaped,
+        count: shaped.length,
+        nextBeforeMs: lastMs,
+        nextExcludeIds,
+        hasMoreOlder: sorted.length > PAGE_SIZE || anyHitLimit
       };
     },
 
@@ -1749,7 +2423,7 @@
             Status: 'Pending',
             ReceivedAt: receivedAt,
             CreatedAt: now,
-            UpdatedAt: now,
+            UpdatedAt: tmServerTs_(),
             CompletedAt: null,
             ReopenCount: 0,
             LastReminderAt: null,
@@ -1772,7 +2446,7 @@
             Status: 'Pending',
             ReceivedAt: receivedAt,
             CreatedAt: now,
-            UpdatedAt: now,
+            UpdatedAt: tmServerTs_(),
             CompletedAt: null,
             ReopenCount: 0,
             LastReminderAt: null,
@@ -1841,7 +2515,7 @@
         subWrites.slice(i, i + 450).forEach(w => b.set(w.ref, w.data));
         await b.commit();
       }
-      taskWrites.forEach(w => upsertTaskInCache_(Object.assign({ id: w.data.TaskID }, w.data)));
+      taskWrites.forEach(w => upsertTaskInCache_(Object.assign({ id: w.data.TaskID }, w.data, { UpdatedAt: now })));
 
       const recipients = Object.keys(taskRowsForMail);
       let mail = null;
@@ -1888,7 +2562,7 @@
 
       changes = changes || {};
       const now = new Date();
-      const updates = { UpdatedAt: now };
+      const updates = { UpdatedAt: tmServerTs_() };
       const batch = db.batch();
       const watcherCodes = task.WatcherCodes || getWatcherCodes_(task.AssignedTo, task.AssignedBy, hier);
       const changedFields = [];
@@ -2017,7 +2691,7 @@
       await batch.commit();
 
       let mail = null;
-      const freshTask = Object.assign({}, task, updates);
+      const freshTask = Object.assign({}, task, updates, { UpdatedAt: now });
       upsertTaskInCache_(Object.assign({ id }, freshTask));
       if (reopening && reopenRecipient) {
         try {
@@ -2067,7 +2741,7 @@
           continue;
         }
 
-        const updates = { Status: status, UpdatedAt: now, CompletedAt: status === 'Completed' ? now : null };
+        const updates = { Status: status, UpdatedAt: tmServerTs_(), CompletedAt: status === 'Completed' ? now : null };
         if (reopening) updates.ReopenCount = (Number(t.ReopenCount) || 0) + 1;
         if (status === 'In Progress' && !t.ReceivedAt) updates.ReceivedAt = now;
         batch.update(docRef, updates);
@@ -2082,7 +2756,7 @@
         });
         updated++;
         updatedIds.push(id);
-        const merged = Object.assign({}, t, updates);
+        const merged = Object.assign({}, t, updates, { UpdatedAt: now });
         updatedRaw.push(Object.assign({ id }, merged));
         if (reopening && emp) reopenMails.push({ task: merged, emp });
       }
@@ -2162,7 +2836,7 @@
           State: targetEmp.State || '',
           Division: targetEmp.Division || '',
           WatcherCodes: watcherCodes,
-          UpdatedAt: now,
+          UpdatedAt: tmServerTs_(),
           ReceivedAt: targetEmp.EmpCode === String(user.EmpCode) ? (t.ReceivedAt || now) : null
         };
         const rewrapped = await tmRewrapTaskKeys_(t, targetEmp.EmpCode, t.AssignedBy, user.EmpCode, hier);
@@ -2178,7 +2852,7 @@
           Details: JSON.stringify({ fields: ['assignee'], reassignedTo: targetEmp.EmpCode }),
           WatcherCodes: watcherCodes
         });
-        const merged = Object.assign({}, t, updates);
+        const merged = Object.assign({}, t, updates, { UpdatedAt: now });
         updatedRaw.push(Object.assign({ id }, merged));
         updatedTasks.push(await tmShapeTask_(merged, access, hier.byCode));
       }
@@ -2300,7 +2974,7 @@
 
         const prevStatus = String(t.Status || 'Pending');
         if (prevStatus === 'Pending' || !t.ReceivedAt) {
-          const updates = { ReceivedAt: t.ReceivedAt || now, UpdatedAt: now };
+          const updates = { ReceivedAt: t.ReceivedAt || now, UpdatedAt: tmServerTs_() };
           if (prevStatus === 'Pending') updates.Status = 'In Progress';
           batch.update(docRef, updates);
           batch.set(db.collection('taskHistory').doc(), {
@@ -2312,7 +2986,7 @@
             Details: JSON.stringify({ from: prevStatus, to: updates.Status || prevStatus }),
             WatcherCodes: t.WatcherCodes || getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier)
           });
-          ackedRaw.push(Object.assign({ id }, t, updates));
+          ackedRaw.push(Object.assign({ id }, t, updates, { UpdatedAt: now }));
           confirmed++;
         }
       }
@@ -2703,10 +3377,33 @@
       const avgLeadDays = leadCount ? Math.round((leadDaysSum / leadCount) * 10) / 10 : null;
       const reopenRate = counts.Total ? Math.round(reopenedCount * 1000 / counts.Total) / 10 : 0;
 
+      // Merge archived closed-month rollups into 6-month trend chart when viewing org-wide unfiltered Admin/HO dashboard
+      const isOrgUnfiltered = (access.admin || access.headOffice)
+        && !f.region && !f.state && !f.location && !f.role && !f.nazim && !f.employee && !priorityFilter;
+      if (isOrgUnfiltered) {
+        try {
+          const monthlyStats = await memoGet('monthlyStats', async () => {
+            const snap = await db.collection('stats').get();
+            const out = {};
+            snap.forEach(d => {
+              const s = d.data() || {};
+              if (s.month) out[String(s.month)] = s;
+            });
+            return out;
+          });
+          Object.keys(monthlyStats).forEach(m => {
+            const s = monthlyStats[m];
+            byCreated[m] = (byCreated[m] || 0) + (Number(s.created) || 0);
+            byCompleted[m] = (byCompleted[m] || 0) + (Number(s.completed) || 0);
+          });
+        } catch (ignore) { /* stats optional */ }
+      }
+
       return {
         ok: true,
         employeeOnly: false,
         fromCache: !!taskRes.fromCache,
+        syncMode: taskRes.syncMode || 'active',
         asOf: tmStamp_(taskRes.fetchedAt || new Date()),
         counts,
         options,
@@ -2746,7 +3443,7 @@
         byPriority,
         due: byDue,
         weekly: weekly.map(w => ({ label: w.label, created: w.created, completed: w.completed })),
-        trends: Object.keys(byCreated).sort().slice(-6).map(month => ({ month, created: byCreated[month], completed: byCompleted[month] || 0 })),
+        trends: Array.from(new Set(Object.keys(byCreated).concat(Object.keys(byCompleted)))).sort().slice(-6).map(month => ({ month, created: byCreated[month] || 0, completed: byCompleted[month] || 0 })),
         topOverdue,
         dueTodayList,
         awaitingConfirmList,
@@ -3170,17 +3867,33 @@
       const cfg = await tmConfig_();
       const hier = await tmHierarchy_();
       const empCount = Object.keys(hier.byCode).filter(c => hier.byCode[c].Active === 'Y').length;
-      const taskSnap = await db.collection('tasks').get();
-      const stats = { employees: empCount, people: empCount, tasks: taskSnap.size, pending: 0, inProgress: 0, completed: 0, overdue: 0 };
 
-      taskSnap.forEach(d => {
-        const t = d.data();
-        if (t.Status === 'Completed') stats.completed++;
+      // Reuse active delta-synced cache for pending/inProgress/overdue, and .count() for total Completed (avoids full collection scan)
+      const [taskRes, completedTotal] = await Promise.all([
+        tmGetVisibleTasks_(access, 'team'),
+        (async () => {
+          try {
+            const q = db.collection('tasks').where('Status', '==', 'Completed');
+            if (typeof q.count === 'function') {
+              const agg = await q.count().get();
+              return Number(agg.data().count) || 0;
+            }
+          } catch (ignore) {}
+          return null;
+        })()
+      ]);
+
+      const stats = { employees: empCount, people: empCount, tasks: 0, pending: 0, inProgress: 0, completed: 0, overdue: 0 };
+      let recentCompleted = 0;
+      (taskRes.tasks || []).forEach(t => {
+        if (t.Status === 'Completed') recentCompleted++;
         else {
           if (t.Status === 'In Progress') stats.inProgress++; else stats.pending++;
           if (tmOverdue_(t.DueDate, t.Status)) stats.overdue++;
         }
       });
+      stats.completed = completedTotal != null ? completedTotal : recentCompleted;
+      stats.tasks = stats.pending + stats.inProgress + stats.completed;
 
       const mail = await tmMailStatusSummary_();
       const appUrl = (typeof window !== 'undefined' && window.location) ? window.location.href.split('#')[0].split('?')[0] : '';
@@ -3236,7 +3949,8 @@
       };
       if (!v.APP_NAME) throw new Error('Please enter an app name.');
       await db.collection('config').doc('app_config').set(v, { merge: true });
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'SETTINGS_UPDATE', 'app_config', v);
       return { ok: true, timersReinstalled: false, settings: v };
     },
@@ -3245,14 +3959,19 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const hier = await tmHierarchy_();
+      const [hier, roles, regions, states, divisions] = await Promise.all([
+        tmHierarchyLive_(),
+        tmRolesLive_(),
+        tmRegionsLive_(),
+        tmStatesLive_(),
+        tmDivisionsLive_()
+      ]);
       const people = Object.values(hier.byCode).map(e => ({
         EmpCode: e.EmpCode, EmpName: e.EmpName, Nazim: e.Nazim, Division: e.Division,
         State: e.State || '', Region: e.Region, Role: e.Role, AppRole: e.AppRole || 'User',
         Email: e.Email, Active: e.Active, LastLogin: tmStamp_(e.LastLogin)
       })).sort((a, b) => a.EmpName.localeCompare(b.EmpName));
 
-      const [roles, regions, states, divisions] = await Promise.all([tmRoles_(), tmRegions_(), tmStates_(), tmDivisions_()]);
       return {
         ok: true,
         people,
@@ -3275,7 +3994,7 @@
       if (!code) throw new Error('Employee code is required.');
 
       const cfg = await tmConfig_();
-      const hier = await tmHierarchy_();
+      const hier = await tmHierarchyLive_();
       const existing = hier.byCode[code] || null;
       const isNew = !existing;
 
@@ -3358,11 +4077,12 @@
 
       // If Nazim or location changed on an existing employee, update State/Region/Division & WatcherCodes on their open tasks
       if (existing && (existing.Nazim !== p.Nazim || existing.Region !== p.Region || existing.State !== p.State || existing.Division !== p.Division)) {
-        memoClear();
-        const freshHier = await tmHierarchy_();
-        const taskSnap = await db.collection('tasks').where('AssignedTo', '==', code).get();
+        memoClear({ clearDirIdb: true });
+        const freshHier = await tmHierarchyLive_();
+        const taskSnap = await db.collection('tasks').where('AssignedTo', '==', code).where('Status', 'in', ['Pending', 'In Progress']).get();
         const batch = db.batch();
         let count = 0;
+        const srvTs = tmServerTs_();
         taskSnap.forEach(d => {
           const t = d.data();
           if (t.Status !== 'Completed') {
@@ -3370,7 +4090,8 @@
               Region: p.Region,
               State: p.State,
               Division: p.Division,
-              WatcherCodes: getWatcherCodes_(code, t.AssignedBy, freshHier)
+              WatcherCodes: getWatcherCodes_(code, t.AssignedBy, freshHier),
+              UpdatedAt: srvTs
             });
             count++;
           }
@@ -3412,7 +4133,8 @@
         } catch (ignore) {}
       }
 
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, isNew ? 'PERSON_ADD' : 'PERSON_UPDATE', code, {});
       return { ok: true, created: isNew };
     },
@@ -3427,7 +4149,7 @@
       if (code === String(user.EmpCode).toUpperCase()) throw new Error('You cannot delete your own account.');
       if (code === 'ADMIN') throw new Error('The primary ADMIN account cannot be deleted.');
 
-      const hier = await tmHierarchy_();
+      const hier = await tmHierarchyLive_();
       const target = hier.byCode[code];
       if (!target) throw new Error('Employee not found.');
 
@@ -3436,11 +4158,13 @@
         throw new Error(`This person still has ${reports.length} assigned report(s). Reassign their Nazim first.`);
       }
 
-      const taskSnap = await db.collection('tasks').where('AssignedTo', '==', code).get();
-      let openCount = 0;
-      taskSnap.forEach(d => { if (String((d.data() || {}).Status || 'Pending') !== 'Completed') openCount++; });
-      if (openCount > 0) {
-        throw new Error(`This person still has ${openCount} open task(s). Reassign, complete, or delete their open tasks first.`);
+      const taskSnap = await db.collection('tasks')
+        .where('AssignedTo', '==', code)
+        .where('Status', 'in', ['Pending', 'In Progress'])
+        .limit(1)
+        .get();
+      if (!taskSnap.empty) {
+        throw new Error('This person still has open task(s). Reassign, complete, or delete their open tasks first.');
       }
 
       const batch = db.batch();
@@ -3452,7 +4176,8 @@
       }
       await batch.commit();
 
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'PERSON_DELETE', code, { name: target.EmpName });
       return { ok: true, EmpCode: code, message: `${target.EmpName} (${code}) removed.` };
     },
@@ -3473,7 +4198,7 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const [roles, h] = await Promise.all([tmRoles_(), tmHierarchy_()]);
+      const [roles, h] = await Promise.all([tmRolesLive_(), tmHierarchyLive_()]);
       const inUse = {};
       Object.keys(h.byCode).forEach(c => {
         if (h.byCode[c].Active === 'Y' && h.byCode[c].Role) inUse[h.byCode[c].Role] = (inUse[h.byCode[c].Role] || 0) + 1;
@@ -3525,7 +4250,7 @@
         if (!r.Level || r.ParentRole) r.Level = depthOf(r.Role);
       });
 
-      const h = await tmHierarchy_();
+      const h = await tmHierarchyLive_();
       const inUse = {};
       Object.keys(h.byCode).forEach(c => {
         if (h.byCode[c].Active === 'Y') inUse[h.byCode[c].Role] = (inUse[h.byCode[c].Role] || 0) + 1;
@@ -3566,7 +4291,8 @@
       });
       if (uChanged) await uBatch.commit();
 
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'ROLES_UPDATE', 'roles', { count: clean.length });
       return { ok: true };
     },
@@ -3576,7 +4302,7 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const [regions, states, divisions] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
+      const [regions, states, divisions] = await Promise.all([tmRegionsLive_(), tmStatesLive_(), tmDivisionsLive_()]);
       return { ok: true, regions, states, divisions, indiaStates: TM_INDIA_STATES };
     },
 
@@ -3584,7 +4310,7 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const [hier, regions, states, divisions] = await Promise.all([tmHierarchy_(), tmRegions_(), tmStates_(), tmDivisions_()]);
+      const [hier, regions, states, divisions] = await Promise.all([tmHierarchyLive_(), tmRegionsLive_(), tmStatesLive_(), tmDivisionsLive_()]);
       const emps = Object.values(hier.byCode);
 
       if (kind === 'region') {
@@ -3607,7 +4333,8 @@
       } else {
         throw new Error('Unknown location type.');
       }
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'LOCATION_DELETE', kind + ':' + id, {});
       return { ok: true };
     },
@@ -3616,7 +4343,7 @@
       const { user } = await tmAuth_(token);
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
-      const [hier, regions, states, divisions] = await Promise.all([tmHierarchy_(), tmRegions_(), tmStates_(), tmDivisions_()]);
+      const [hier, regions, states, divisions] = await Promise.all([tmHierarchyLive_(), tmRegionsLive_(), tmStatesLive_(), tmDivisionsLive_()]);
       const emps = Object.values(hier.byCode);
       const batch = db.batch();
       let removed = 0;
@@ -3639,7 +4366,8 @@
       });
 
       if (removed) await batch.commit();
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'LOCATIONS_CLEANUP', 'locations', { removed });
       return { ok: true, removed };
     },
@@ -3657,7 +4385,8 @@
         if (!reg) throw new Error('Region name is required.');
         const id = input.id || reg;
         await db.collection('regions').doc(id).set({ Region: reg, Country: 'India', Active: active, UpdatedAt: now }, { merge: true });
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'region:' + reg, { active });
         return { ok: true };
       }
@@ -3667,11 +4396,12 @@
         const st = tmClip_(input.State, 60);
         if (!reg) throw new Error('Select a parent Region first.');
         if (!st) throw new Error('State name is required.');
-        const regions = await tmRegions_();
+        const regions = await tmRegionsLive_();
         if (!regions.some(r => r.Region === reg)) throw new Error(`Region "${reg}" does not exist.`);
         const id = input.id || tmLocDocId_([reg, st]);
         await db.collection('states').doc(id).set({ Region: reg, State: st, Active: active, UpdatedAt: now }, { merge: true });
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'state:' + st, { region: reg, active });
         return { ok: true };
       }
@@ -3683,11 +4413,12 @@
         if (!reg) throw new Error('Select a parent Region first.');
         if (!st) throw new Error('Select a parent State first.');
         if (!div) throw new Error('Division name is required.');
-        const states = await tmStates_();
+        const states = await tmStatesLive_();
         if (!states.some(s => s.Region === reg && s.State === st)) throw new Error(`State "${st}" under Region "${reg}" does not exist.`);
         const id = input.id || tmLocDocId_([reg, st, div]);
         await db.collection('divisions').doc(id).set({ Region: reg, State: st, Division: div, Active: active, UpdatedAt: now }, { merge: true });
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'LOCATION_SAVE', 'division:' + div, { region: reg, state: st, active });
         return { ok: true };
       }
@@ -3701,12 +4432,12 @@
       const access = await tmAccess_(user);
       if (!access.admin) throw new Error('Administrator access is required.');
       const [cfg, hier, roles, regions, states, divisions, tpls] = await Promise.all([
-        tmConfig_(),
-        tmHierarchy_(),
-        tmRoles_(),
-        tmRegions_(),
-        tmStates_(),
-        tmDivisions_(),
+        tmConfigLive_(),
+        tmHierarchyLive_(),
+        tmRolesLive_(),
+        tmRegionsLive_(),
+        tmStatesLive_(),
+        tmDivisionsLive_(),
         tmTemplates_()
       ]);
       return {
@@ -3733,7 +4464,7 @@
       if (!Array.isArray(rows) || !rows.length) throw new Error('No location rows provided.');
       if (rows.length > 300) throw new Error('You can import at most 300 location rows at once.');
 
-      const [regions, states, divisions] = await Promise.all([tmRegions_(), tmStates_(), tmDivisions_()]);
+      const [regions, states, divisions] = await Promise.all([tmRegionsLive_(), tmStatesLive_(), tmDivisionsLive_()]);
       const regSet = new Set(regions.map(r => r.Region.toLowerCase()));
       const regNameByLow = {};
       regions.forEach(r => { regNameByLow[r.Region.toLowerCase()] = r.Region; });
@@ -3812,7 +4543,8 @@
         await b.commit();
       }
       if (writes.length) {
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'LOCATIONS_BULK_IMPORT', 'locations', { writes: writes.length, created });
       }
       return { ok: true, created, skipped, failed, results };
@@ -3825,7 +4557,7 @@
       if (!Array.isArray(rows) || !rows.length) throw new Error('No role rows provided.');
       if (rows.length > 200) throw new Error('You can import at most 200 roles at once.');
 
-      const existing = await tmRoles_();
+      const existing = await tmRolesLive_();
       const seen = new Set(existing.map(r => r.Role.toLowerCase()));
       const batchSeen = new Set();
       const toCreate = [];
@@ -3868,7 +4600,8 @@
           results.push({ row: item.rowNum, key: item.rec.Role, status: 'CREATED', message: 'Role created.' });
         });
         await batch.commit();
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'ROLES_BULK_IMPORT', 'roles', { created: toCreate.length });
       }
 
@@ -3973,10 +4706,10 @@
       if (rows.length > 100) throw new Error('You can import at most 100 people in one upload.');
 
       const [cfg, hier, rolesList, regionsList] = await Promise.all([
-        tmConfig_(),
-        tmHierarchy_(),
-        tmRoles_(),
-        tmRegions_()
+        tmConfigLive_(),
+        tmHierarchyLive_(),
+        tmRolesLive_(),
+        tmRegionsLive_()
       ]);
 
       const workingByCode = Object.assign({}, hier.byCode);
@@ -4114,7 +4847,8 @@
       }
 
       if (created) {
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         await tmAudit_(user.EmpCode, 'PEOPLE_BULK_IMPORT', 'employees', { created });
       }
       results.sort((a, b) => a.row - b.row);
@@ -4143,6 +4877,7 @@
       const nextVer = tmId_('v');
       await db.collection('employees').doc(user.EmpCode).update({ SessionVersion: nextVer, MustChangePassword: 'N' });
       await db.collection('users').doc(fbUser.uid).update({ SessionVersion: nextVer });
+      tmSetLocalSv_(nextVer);
       await tmAudit_(user.EmpCode, 'PASSWORD_CHANGE', '', {});
       memoClear();
       return { ok: true };
@@ -4151,7 +4886,9 @@
     apiSignOut: async function () {
       if (window.CryptoVault) window.CryptoVault.clearSession();
       if (initFirebase() && fbAuth) await fbAuth.signOut().catch(() => {});
-      memoClear();
+      tmClearLocalSv_();
+      memoClear({ clearDirIdb: true });
+      await idbCacheClearAll_();
       return { ok: true };
     },
 
@@ -4162,7 +4899,9 @@
       await db.collection('users').doc(fbUser.uid).update({ SessionVersion: nextVer });
       if (window.CryptoVault) window.CryptoVault.clearSession();
       await fbAuth.signOut().catch(() => {});
-      memoClear();
+      tmClearLocalSv_();
+      memoClear({ clearDirIdb: true });
+      await idbCacheClearAll_();
       return { ok: true };
     },
 
@@ -4174,8 +4913,12 @@
 
       const cfg = await tmConfig_();
       const days = Number(daysParam) > 0 ? Number(daysParam) : (Number(cfg.ARCHIVE_AFTER_DAYS) || 60);
-      const cutoffDay = tmDayKey_(new Date(Date.now() - days * 86400000));
-      const snap = await db.collection('tasks').where('Status', '==', 'Completed').get();
+      const cutoffDate = new Date(Date.now() - days * 86400000);
+      const cutoffDay = tmDayKey_(cutoffDate);
+      const snap = await tmRunQueryWithFallback_(
+        () => db.collection('tasks').where('Status', '==', 'Completed').where('CompletedAt', '<', cutoffDate).get(),
+        () => db.collection('tasks').where('Status', '==', 'Completed').get()
+      );
       const toArchive = [];
       const now = new Date();
 
@@ -4183,22 +4926,65 @@
         const t = d.data();
         const doneDate = tmAsDate_(t.CompletedAt) || tmAsDate_(t.UpdatedAt) || tmAsDate_(t.DueDate);
         const doneDay = doneDate ? tmDayKey_(doneDate) : '';
-        if (doneDay && doneDay < cutoffDay) toArchive.push({ ref: d.ref, data: t });
+        if (doneDay && doneDay < cutoffDay) toArchive.push({ id: d.id, ref: d.ref, data: t });
       });
 
       if (!toArchive.length) {
         return { ok: true, archived: 0, message: `No completed tasks older than ${days} days to archive.` };
       }
 
-      for (const item of toArchive) {
+      const monthlyRollup = {};
+      toArchive.forEach(item => {
+        const t = item.data;
+        const cDt = tmAsDate_(t.CreatedAt);
+        const fDt = tmAsDate_(t.CompletedAt) || tmAsDate_(t.UpdatedAt) || tmAsDate_(t.DueDate);
+        const dDt = tmAsDate_(t.DueDate);
+        if (cDt) {
+          const cm = tmDayKey_(cDt).slice(0, 7);
+          (monthlyRollup[cm] = monthlyRollup[cm] || { created: 0, completed: 0, completedOnTime: 0, completedLate: 0 }).created++;
+        }
+        if (fDt) {
+          const fm = tmDayKey_(fDt).slice(0, 7);
+          const rec = (monthlyRollup[fm] = monthlyRollup[fm] || { created: 0, completed: 0, completedOnTime: 0, completedLate: 0 });
+          rec.completed++;
+          if (!dDt || tmDayKey_(fDt) <= tmDayKey_(dDt)) rec.completedOnTime++;
+          else rec.completedLate++;
+        }
+      });
+
+      // Batch archive writes (2 ops per task -> 200 tasks = 400 ops per batch)
+      for (let i = 0; i < toArchive.length; i += 200) {
         const b = db.batch();
-        b.set(db.collection('taskArchive').doc(item.data.TaskID), Object.assign({}, item.data, { ArchivedAt: now }));
-        b.delete(item.ref);
+        toArchive.slice(i, i + 200).forEach(item => {
+          b.set(db.collection('taskArchive').doc(item.data.TaskID || item.id), Object.assign({}, item.data, { ArchivedAt: now }));
+          b.delete(item.ref);
+        });
         await b.commit();
       }
 
+      // Persist closed-month archive rollups so Dashboard 6-month charts stay accurate after archival
+      const inc = firebase.firestore.FieldValue.increment;
+      const monthKeys = Object.keys(monthlyRollup);
+      if (monthKeys.length) {
+        const sb = db.batch();
+        monthKeys.forEach(ym => {
+          const r = monthlyRollup[ym];
+          sb.set(db.collection('stats').doc('monthly_' + ym), {
+            month: ym,
+            created: inc(r.created || 0),
+            completed: inc(r.completed || 0),
+            completedOnTime: inc(r.completedOnTime || 0),
+            completedLate: inc(r.completedLate || 0),
+            updatedAt: tmServerTs_()
+          }, { merge: true });
+        });
+        await sb.commit().catch(() => {});
+      }
+
+      removeTasksFromCache_(toArchive.map(item => item.data.TaskID || item.id));
       await db.collection('config').doc('app_config').set({ ARCHIVE_AT: now.toISOString() }, { merge: true });
-      memoClear();
+      delete _MEMO['monthlyStats'];
+      await tmRebuildDirectoryDoc_();
       await tmAudit_(user.EmpCode, 'TASKS_ARCHIVED', 'taskArchive', { count: toArchive.length, days });
       return { ok: true, archived: toArchive.length, message: `Archived ${toArchive.length} completed task(s) older than ${days} days.` };
     },
@@ -4256,14 +5042,15 @@
       }
 
       // Repair missing WatcherCodes on tasks
-      const hier = await tmHierarchy_();
+      const hier = await tmHierarchyLive_();
       const tSnap = await db.collection('tasks').get();
       let fixedTasks = 0;
       const tb = db.batch();
+      const srvTs = tmServerTs_();
       tSnap.forEach(d => {
         const t = d.data();
         if (!Array.isArray(t.WatcherCodes) || !t.WatcherCodes.length) {
-          tb.update(d.ref, { WatcherCodes: getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier) });
+          tb.update(d.ref, { WatcherCodes: getWatcherCodes_(t.AssignedTo, t.AssignedBy, hier), UpdatedAt: srvTs });
           fixedTasks++;
         }
       });
@@ -4272,7 +5059,10 @@
         repaired.push(`Updated WatcherCodes on ${fixedTasks} task(s)`);
       }
 
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await idbCacheClearAll_();
+      const rebuilt = await tmRebuildDirectoryDoc_();
+      if (rebuilt) repaired.push('Rebuilt compiled directory cache');
       return { ok: true, repaired };
     },
 
@@ -4326,7 +5116,7 @@
 
       // 2. Setup Checks
       await check('Setup', 'Directory, roles & regions integrity', async () => {
-        const h = await tmHierarchy_();
+        const h = await tmHierarchyLive_();
         const roles = await tmRoles_();
         const regs = await tmRegions_();
         const admins = Object.values(h.byCode).filter(e => e.Active === 'Y' && (e.Role === 'Admin' || e.Role === 'System Admin'));
@@ -4339,6 +5129,14 @@
         const cfg = window.EMAIL_CONFIG || {};
         if (!cfg.appsScriptRelayUrl) return { warn: 'Apps Script Email Relay URL is not configured in firebase-config.js.' };
         return 'Relay URL configured';
+      });
+
+      await check('Setup', 'Directory & Delta sync cache', async () => {
+        const bundle = await tmLoadDirectoryBundle_();
+        const dirSnap = await db.collection('meta').doc('directory').get().catch(() => null);
+        const hasCompiled = !!(dirSnap && dirSnap.exists && dirSnap.data() && dirSnap.data().employees);
+        if (!hasCompiled) return { warn: 'Compiled directory cache not built yet. Click Repair setup to publish meta/directory.' };
+        return `Compiled directory active (source: ${bundle.source || 'compiled'}, IndexedDB ${typeof indexedDB !== 'undefined' ? 'enabled' : 'unavailable'})`;
       });
 
       // 3. Live Firestore Check
@@ -4385,7 +5183,8 @@
           }
         });
         await batch.commit();
-        memoClear();
+        memoClear({ clearDirIdb: true });
+        await tmRebuildDirectoryDoc_();
         return { people: pCount, tasks: tCount };
       };
 
@@ -4435,7 +5234,8 @@
         });
       });
       await tb.commit();
-      memoClear();
+      memoClear({ clearDirIdb: true });
+      await tmRebuildDirectoryDoc_();
       return { ok: true, password: 'Demo accounts (display/analytics only)', people: demoPeople.length, tasks: specs.length };
     }
   };
