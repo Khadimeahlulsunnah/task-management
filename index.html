@@ -953,7 +953,7 @@ const priBadge = p => {
 };
 
 /* ================= state ================= */
-const S = { token: '', boot: null, view: 'mine', taskView: { mine: store.get('tm.v.mine') || 'list', team: store.get('tm.v.team') || 'list' }, calMonth: '', calDay: '', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, importType: 'people', importMeta: null, importPreview: null, importResult: null, importFileName: '', pick: {} };
+const S = { token: '', boot: null, view: 'mine', taskView: { mine: store.get('tm.v.mine') || 'list', team: store.get('tm.v.team') || 'list' }, calMonth: '', calDay: '', filters: { mine: {}, team: {} }, data: { mine: null, team: null }, older: { mine: { beforeMs: 0, excludeIds: [], exhausted: false }, team: { beforeMs: 0, excludeIds: [], exhausted: false } }, ackTasks: [], seq: {}, fresh: {}, openId: '', openTask: null, draft: {}, selected: { mine: new Set(), team: new Set() }, dashboard: null, dashFilters: {}, dashSeq: 0, dashTimer: 0, dashTab: 'overview', dashFilterOpen: false, dashSearch: '', dashTaskQuery: '', mailTab: 'send', mailData: null, mailManagerSearch: '', mailManagers: [], mailManagerCodes: new Set(), mailManagerLoaded: false, adminTab: 'overview', admin: {}, importType: 'people', importMeta: null, importPreview: null, importResult: null, importFileName: '', pick: {} };
 const AUTH_RE = /sign in again|signed out|not active/i;
 let inflight = 0;
 
@@ -1059,6 +1059,7 @@ async function doLogin(form) {
 function enter(r) {
   S.token = r.token || S.token; store.set('tm.token', S.token); S.boot = r; S.appName = r.app.name; document.title = r.app.name;
   S.data.mine = r.mine; S.data.team = r.team; S.fresh.mine = S.fresh.team = Date.now(); S.filters = { mine: {}, team: {} };
+  S.older = { mine: { beforeMs: 0, excludeIds: [], exhausted: false }, team: { beforeMs: 0, excludeIds: [], exhausted: false } };
   S.ackTasks = (r.mine && Array.isArray(r.mine.ackTasks)) ? r.mine.ackTasks : [];
   S.selected.mine.clear(); S.selected.team.clear();
   S.dashboard = null; S.dashFilters = {}; S.mailData = null; S.mailTab = 'send'; S.mailManagerSearch = ''; S.mailManagerCodes.clear(); S.mailManagerLoaded = false; S.importMeta = null; S.importPreview = null; S.importResult = null; S.importFileName = '';
@@ -1209,7 +1210,7 @@ function showView(v) {
   if (v === 'dashboard') { renderDashboardShell(); loadDashboard(); return; }
   renderTasksShell(v);
   const age = Date.now() - (S.fresh[v] || 0);
-  if (!S.data[v] || age > 300000) loadList(v, { silent: !!S.data[v] });
+  if (!S.data[v] || age > 60000) loadList(v, { silent: !!S.data[v] });
 }
 
 function dashboardSelect(key, label, options, placeholder) {
@@ -1264,7 +1265,7 @@ function renderDashboardShell() {
       <div class="nx-toprow">
         <div class="nx-title">
           <h2>Team Dashboard</h2>
-          <p>${d ? (d.fromCache ? 'Cached snapshot (' + d.asOf + ') · 0 task reads' : 'Synced ' + d.asOf) : 'Loading your team summary…'}</p>
+          <p>${d ? (d.fromCache ? 'Cached snapshot (' + d.asOf + ') · 0 task reads' : (d.syncMode === 'delta' ? 'Delta synced ' : 'Synced ') + d.asOf) : 'Loading your team summary…'}</p>
         </div>
         <div class="nx-controls">
           <button type="button" class="btn sm" data-act="dashtogglefilters">${S.dashFilterOpen ? 'Hide filters ▴' : 'Filters ▾'}${activeCount ? h` <span class="nx-tab-cnt">${activeCount}</span>` : ''}</button>
@@ -2382,6 +2383,15 @@ function renderKanbanBoard(scope, d) {
   })}</div>`;
 }
 
+function renderMoreControls(scope, d) {
+  const f = S.filters[scope] || {};
+  const old = (S.older && S.older[scope]) || { exhausted: false };
+  const canOlder = !old.exhausted && !f.overdue && (!f.status || f.status === 'Completed');
+  return h`<div style="display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap">
+    ${d.hasMore ? h`<button class="btn" data-act="loadmore" data-busy="Loading">Show more (${d.total - d.tasks.length} left)</button>` : (d.total > 8 ? h`<small class="muted">${d.total} active &amp; recent tasks</small>` : '')}
+    ${canOlder ? h`<button class="btn sm" data-act="loadolder" data-busy="Loading older">Load older completed (&gt;30d)</button>` : ''}
+  </div>`;
+}
 function renderList(scope) {
   const d = S.data[scope], box = $('#list'), more = $('#more'); if (!box) return;
   const rawMode = S.taskView && S.taskView[scope];
@@ -2390,7 +2400,7 @@ function renderList(scope) {
   if (!d.tasks.length && mode !== 'calendar') {
     const filtered = Object.keys(S.filters[scope]).some(k => S.filters[scope][k]);
     mount(box, h`<div class="empty"><b>${filtered ? 'No tasks match these filters' : scope === 'team' ? 'Nothing in your team yet' : 'You have no tasks'}</b>${filtered ? h`<button class="btn sm" data-act="clear">Clear filters</button>` : scope === 'mine' ? h`<span>Tasks assigned to you will appear here.</span> <button class="btn sm primary" data-act="newtask">Add a task for yourself</button>` : h`<span>Tasks assigned to people in your team will appear here.</span>`}</div>`);
-    more.innerHTML = ''; renderBulkBar(scope); return;
+    mount(more, renderMoreControls(scope, d)); renderBulkBar(scope); return;
   }
   if (mode === 'calendar') {
     more.innerHTML = '';
@@ -2408,7 +2418,7 @@ function renderList(scope) {
   }
   if (mode === 'board') {
     mount(box, renderKanbanBoard(scope, d));
-    mount(more, d.hasMore ? h`<button class="btn" data-act="loadmore" data-busy="Loading">Show more (${d.total - d.tasks.length} left)</button>` : (d.total > 8 ? h`<small class="muted">${d.total} tasks</small>` : ''));
+    mount(more, renderMoreControls(scope, d));
     renderBulkBar(scope);
     return;
   }
@@ -2420,7 +2430,7 @@ function renderList(scope) {
   });
   if (open) out.push(raw('</div>'));
   mount(box, h`${out}`);
-  mount(more, d.hasMore ? h`<button class="btn" data-act="loadmore" data-busy="Loading">Show more (${d.total - d.tasks.length} left)</button>` : (d.total > 8 ? h`<small class="muted">${d.total} tasks</small>` : ''));
+  mount(more, renderMoreControls(scope, d));
   renderBulkBar(scope);
 }
 function renderBulkBar(scope) {
@@ -2453,7 +2463,14 @@ async function loadList(scope, opt) {
   try {
     const r = await api('apiListTasks', S.token, f);
     if (seq !== S.seq[scope]) return;
-    S.data[scope] = opt.append && d ? Object.assign({}, r, { tasks: d.tasks.concat(r.tasks) }) : r; S.fresh[scope] = Date.now();
+    if (opt.append && d) {
+      const seen = new Set(d.tasks.map(x => x.TaskID));
+      const merged = d.tasks.concat((r.tasks || []).filter(x => !seen.has(x.TaskID)));
+      S.data[scope] = Object.assign({}, r, { tasks: merged });
+    } else {
+      S.data[scope] = r;
+    }
+    S.fresh[scope] = Date.now();
     if (scope === 'mine' && !opt.append && Array.isArray(r.ackTasks)) { S.ackTasks = r.ackTasks; renderAckGate(); }
     if (S.view === scope && $('#list')) { renderChips(scope); renderList(scope); }
     syncOpenTask();
@@ -4489,7 +4506,49 @@ const ACT = {
   status: el => { const t = S.openTask; if (t) setStatus(t, el.dataset.s); },
   chip: el => { const sc = S.view, f = S.filters[sc], k = el.dataset.k; delete f.status; delete f.overdue; if (k === 'over') f.overdue = true; else if (k !== 'all') f.status = k; renderChips(sc); loadList(sc, { silent: true }); },
   clear: () => { S.filters[S.view] = {}; renderTasksShell(S.view); loadList(S.view, { silent: true }); },
-  retry: () => loadList(S.view, { forceRefresh: true }), refreshlist: el => busy(el, () => (S.view === 'mine' || S.view === 'team') && loadList(S.view, { silent: true, forceRefresh: true })), loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
+  retry: () => loadList(S.view, { forceRefresh: true }),
+  refreshlist: el => busy(el, () => (S.view === 'mine' || S.view === 'team') && loadList(S.view, { silent: true, forceRefresh: true })),
+  loadmore: el => busy(el, () => loadList(S.view, { append: true, silent: true })),
+  loadolder: el => busy(el, async () => {
+    const sc = S.view === 'team' ? 'team' : 'mine';
+    const old = (S.older && S.older[sc]) || (S.older[sc] = { beforeMs: 0, excludeIds: [], exhausted: false });
+    try {
+      const r = await api('apiListOlderCompleted', S.token, { scope: sc, beforeMs: old.beforeMs || 0, excludeIds: old.excludeIds || [] });
+      old.beforeMs = r.nextBeforeMs || old.beforeMs;
+      old.excludeIds = Array.isArray(r.nextExcludeIds) ? r.nextExcludeIds : [];
+      old.exhausted = !r.hasMoreOlder;
+      const added = Array.isArray(r.tasks) ? r.tasks : [];
+      if (!added.length) {
+        toast('No older completed tasks found.');
+        renderList(sc);
+        return;
+      }
+      const d = S.data[sc];
+      if (d && Array.isArray(d.tasks)) {
+        const seen = new Set(d.tasks.map(x => x.TaskID));
+        const f = S.filters[sc] || {};
+        let appended = 0;
+        added.forEach(t => {
+          if (seen.has(t.TaskID)) return;
+          seen.add(t.TaskID);
+          adjustCacheCounts(d, null, false, t.Status, !!t.Overdue, null, t.Priority);
+          if (taskMatchesFilter(t, f)) {
+            d.tasks.push(t);
+            d.total = (d.total || 0) + 1;
+            appended++;
+          }
+        });
+        if (sc === 'team' && appended) {
+          d.tasks.sort((x, y) => String(x.AssignedToName || x.AssignedTo).localeCompare(String(y.AssignedToName || y.AssignedTo)) || String(x.Title || '').localeCompare(String(y.Title || '')));
+        }
+        toast(`Loaded ${added.length} older completed task(s).` + (appended < added.length ? ` (${appended} match current filters)` : ''));
+        renderChips(sc);
+        renderList(sc);
+      }
+    } catch (e) {
+      if (!e.auth) toast(e.message, true);
+    }
+  }),
   remind: el => S.openTask && askRemind(S.openTask, el), sendremind: el => S.openTask && sendRemind(S.openTask, el), cancelremind: () => S.openTask && mount($('#d-actions'), taskActionsH(S.openTask)),
   edittask: el => { const t = findTask(el.dataset.id); if (t) editTask(t); }, canceledit: el => { const id = el.dataset.id; closeDrawer(true); openTask(id); },
   deletetask: el => {
